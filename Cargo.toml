@@ -1,5 +1,7 @@
 [workspace]
 
 members = [
-    "store",
+    "client",
+    "server",
+    "protocol",
 ]

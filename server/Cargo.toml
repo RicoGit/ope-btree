@@ -1,5 +1,5 @@
 [package]
-name = "store"
+name = "server"
 version = "0.1.0"
 authors = ["Constantine Solovev <constantine.solovev@gmail.com>"]
 edition = "2018"
@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 
 
-error-chain = "0.12.0"
 tokio = "0.1"
 futures = "0.1"
-
+async-kvstore = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
