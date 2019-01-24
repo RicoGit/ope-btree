@@ -6,7 +6,13 @@ edition = "2018"
 
 [dependencies]
 
-
 tokio = "0.1"
 futures = "0.1"
 async-kvstore = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
+
+# Serde
+serde = "1.0"
+serde_derive = "1.0"
+# MessagePack + Serde
+rmpv = { features = ["with-serde"], version = "0.4" }
+rmp-serde = "0.13.7"
