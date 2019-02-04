@@ -1,9 +1,10 @@
 //! BTree implementation.
+//! todo more documentation when btree will be ready
 
 use crate::node_store::NodeStore;
 use async_kvstore::KVStore;
-use serde::Deserialize;
-use serde::Serialize;
+use rmps::{Deserializer, Serializer};
+use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 //
@@ -14,7 +15,7 @@ struct OpeBTree<K, V, NS>
 where
     NS: NodeStore<usize, V>,
     K: Serialize,
-    V: Serialize,
+    V: Serialize + Send,
 {
     // todo remove
     ph1: PhantomData<K>,
@@ -27,7 +28,7 @@ impl<K, V, NS> OpeBTree<K, V, NS>
 where
     NS: NodeStore<usize, V>,
     K: Serialize,
-    V: Serialize,
+    V: Serialize + Send,
 {
     fn new() -> Self {
         unimplemented!()
@@ -38,10 +39,16 @@ where
 // Node
 //
 
-#[derive(Debug, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialOrd, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Node {
     pub size: usize,
     // todo fill and remove pub
+}
+
+impl Node {
+    pub fn new(size: usize) -> Self {
+        Node { size }
+    }
 }
 
 #[cfg(test)]
