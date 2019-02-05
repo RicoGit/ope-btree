@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 // BTree
 //
 
-type GetFuture<'s> = Box<dyn Future<Item = ValueRef, Error = errors::Error> + Send + 's>;
+type GetFuture<'a> = Box<dyn Future<Item = ValueRef, Error = errors::Error> + Send + 'a>;
 
 /// Configuration for OpeBtree.
 pub struct OpeBTreeConf {
