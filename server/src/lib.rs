@@ -6,6 +6,7 @@
 #![allow(unused_variables)]
 
 extern crate async_kvstore;
+extern crate common;
 
 #[macro_use]
 extern crate error_chain;
@@ -14,5 +15,8 @@ extern crate serde;
 extern crate serde_derive;
 extern crate rmp_serde as rmps;
 
-// implementation of ope-btree
+// Order-preserving encryption Btree implementation
 pub mod ope_btree;
+
+// Order-preserving encryption Database
+pub mod ope_db;

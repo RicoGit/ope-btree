@@ -6,6 +6,9 @@ edition = "2018"
 
 [dependencies]
 
+common = { path = "../common" }
+protocol = { path = "../protocol" }
+
 tokio = "0.1"
 futures = "0.1"
 error-chain = "0.12.0"

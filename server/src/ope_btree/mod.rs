@@ -7,6 +7,8 @@ pub mod node_store;
 use self::node_store::BinaryNodeStore;
 use self::node_store::NodeStore;
 use async_kvstore::KVStore;
+use bytes::Bytes;
+use futures::Future;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -15,6 +17,8 @@ use std::marker::PhantomData;
 // BTree
 //
 
+type GetFuture<'s> = Box<dyn Future<Item = ValueRef, Error = errors::Error> + Send + 's>;
+
 /// Configuration for OpeBtree.
 pub struct OpeBTreeConf {
     /// Maximum size of nodes (maximum number children in branches)
@@ -22,6 +26,12 @@ pub struct OpeBTreeConf {
     /// Minimum capacity factor of node. Should be between 0 and 0.5. 0.25 means that
     /// each node except root should always contains between 25% and 100% children.
     alpha: f32,
+}
+
+// todo errors
+
+mod errors {
+    error_chain! {}
 }
 
 /// This class implements a search tree, which allows to run queries over encrypted
@@ -54,10 +64,44 @@ pub struct OpeBTree {
     config: OpeBTreeConf,
 }
 
+#[derive(Clone)]
+pub struct Key(pub Bytes);
+#[derive(Clone)]
+pub struct ValueRef(pub Bytes);
+
+impl From<Bytes> for Key {
+    fn from(bytes: Bytes) -> Self {
+        Key(bytes)
+    }
+}
+
+impl From<Key> for Bytes {
+    fn from(key: Key) -> Self {
+        key.0
+    }
+}
+
+impl From<ValueRef> for Bytes {
+    fn from(val: ValueRef) -> Self {
+        val.0
+    }
+}
+
 impl OpeBTree {
-    fn new(config: OpeBTreeConf, node_store: Box<dyn NodeStore<usize, Node>>) -> Self {
+    pub fn new(config: OpeBTreeConf, node_store: Box<dyn NodeStore<usize, Node>>) -> Self {
         OpeBTree { config, node_store }
     }
+
+    // todo  change key  to cmd
+    pub fn get<'a>(&self, key: Key) -> GetFuture<'a> {
+        unimplemented!()
+    }
+
+    pub fn put<'a>(&mut self, key: Key, val: ValueRef) -> GetFuture<'a> {
+        unimplemented!()
+    }
+
+    // todo traverse, remove
 }
 
 //
@@ -78,7 +122,11 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::common::Hash;
+    use crate::common::ToBytes;
     use crate::ope_btree::Node;
+    use async_kvstore::hashmap_store::HashMapStore;
     use rmps::{Deserializer, Serializer};
     use serde::{Deserialize, Serialize};
 
@@ -91,5 +139,41 @@ mod tests {
 
         let mut de = Deserializer::new(&buf[..]);
         assert_eq!(node, Deserialize::deserialize(&mut de).unwrap());
+    }
+
+    fn create_tree(mut idx: usize) -> OpeBTree {
+        OpeBTree::new(
+            OpeBTreeConf {
+                arity: 8,
+                alpha: 0.25_f32,
+            },
+            Box::new(BinaryNodeStore::new(
+                Box::new(HashMapStore::new()),
+                Box::new(move || {
+                    idx += 1;
+                    idx
+                }),
+            )),
+        )
+    }
+
+    #[test]
+    fn key_valref_hash_converters() {
+        let origin = Bytes::from("key");
+        let key: Key = Key(origin.clone());
+        assert_eq!(origin.clone(), key.bytes());
+        let value_ref = ValueRef(origin.clone());
+        assert_eq!(origin.clone(), value_ref.bytes());
+        let hash = Hash(origin.clone());
+        assert_eq!(origin.clone(), hash.bytes());
+    }
+
+    #[test]
+    fn new_tree_test() {
+
+        // todo
+
+        //        let tree: OpeBTree = create_tree(10);
+        //
     }
 }
