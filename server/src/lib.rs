@@ -14,7 +14,5 @@ extern crate serde;
 extern crate serde_derive;
 extern crate rmp_serde as rmps;
 
-// module with persistent level for any tree
-mod node_store;
 // implementation of ope-btree
-mod btree;
+pub mod ope_btree;

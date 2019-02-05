@@ -59,14 +59,14 @@ where
     fn put(&mut self, node_id: Id, node: Node) -> SFuture<()>;
 }
 
-struct BinaryNodeStore<Id, Node> {
-    pub store: Box<KVStore<Vec<u8>, Vec<u8>>>,
+pub struct BinaryNodeStore<Id, Node> {
+    store: Box<KVStore<Vec<u8>, Vec<u8>>>,
     id_generator: Box<FnMut() -> Id>, // todo Result? Is Error is possible here ?
     _phantom: PhantomData<Node>,      // needed for keeping Node type
 }
 
 impl<Id, Node: Send> BinaryNodeStore<Id, Node> {
-    fn new(store: Box<KVStore<Vec<u8>, Vec<u8>>>, id_generator: Box<FnMut() -> Id>) -> Self {
+    pub fn new(store: Box<KVStore<Vec<u8>, Vec<u8>>>, id_generator: Box<FnMut() -> Id>) -> Self {
         BinaryNodeStore {
             store,
             id_generator,
@@ -128,14 +128,14 @@ fn from_byte<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::btree::Node;
+    use crate::ope_btree::Node;
     use async_kvstore::hashmap_store::HashMapStore;
     use futures::prelude::*;
     use rmps::{Deserializer, Serializer};
     use serde::{Deserialize, Serialize};
 
-    use crate::node_store::BinaryNodeStore;
-    use crate::node_store::NodeStore;
+    use super::BinaryNodeStore;
+    use super::NodeStore;
     use rmp_serde::decode::ReadReader;
 
     fn create(mut idx: u64) -> BinaryNodeStore<u64, Node> {
