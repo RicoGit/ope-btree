@@ -1,8 +1,7 @@
 //! Implementation of Btree node.
 
-use crate::ope_btree::Key;
 use crate::ope_btree::ValueRef;
-use common::Hash;
+use common::{Hash, Key};
 use std::ops::Deref;
 
 type NodeRef = usize;

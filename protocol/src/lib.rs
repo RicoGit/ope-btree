@@ -15,7 +15,7 @@ extern crate error_chain;
 /// of the matching element. If the value is not found then [`Result::Err`] is
 /// returned, containing the index where a matching element could be inserted
 /// while maintaining sorted order.
-type SearchResult = result::Result<usize, usize>;
+pub type SearchResult = result::Result<usize, usize>;
 
 /// Future that carries result of Rpc call.
 type RpcFuture<'f, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 'f>;
@@ -76,7 +76,6 @@ trait PutCallbacks: BtreeCallback {
 
     /// Server sends a new merkle root to a client for approve made changes.
     ///
-    ///
     /// # Arguments
     ///
     /// * `server_merkle_root` - New merkle root after inserting key/value
@@ -92,14 +91,15 @@ trait PutCallbacks: BtreeCallback {
     fn changes_stored<'f>() -> RpcFuture<'f, ()>;
 }
 
-/// A holder of client details needed for inserting a key and a value to the BTree.
-struct ClientPutDetails {
+/// A structure for holding all client details needed for inserting a key and a
+/// value to the OpeBTree.
+pub struct ClientPutDetails {
     /// The key that will be placed to the BTree
     key: Bytes,
-    /// The value hash that will be placed to the BTree
+    /// Hash of value that will be placed to the BTree
     val_hash: Bytes,
-    /// A result of searching client key in server leaf keys. Contains an index
-    /// (position) for inserting specified key and value.
+    /// A result of searching client's key among keys of the leaf in which the
+    /// new key and value will be inserted. Contains an index for inserting.
     search_result: SearchResult,
 }
 

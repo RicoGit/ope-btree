@@ -7,6 +7,7 @@
 
 extern crate async_kvstore;
 extern crate common;
+extern crate protocol;
 
 #[macro_use]
 extern crate error_chain;

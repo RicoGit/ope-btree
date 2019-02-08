@@ -1,6 +1,7 @@
 //! BTree implementation.
 //! todo more documentation when btree will be ready
 
+pub mod command;
 pub mod node;
 pub mod node_store;
 
@@ -10,6 +11,7 @@ use self::node_store::BinaryNodeStore;
 use self::node_store::NodeStore;
 use async_kvstore::KVStore;
 use bytes::Bytes;
+use common::Key;
 use futures::Future;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
@@ -64,18 +66,11 @@ mod errors {
 pub struct OpeBTree {
     node_store: Box<dyn NodeStore<usize, Node>>,
     config: OpeBTreeConf,
+    // todo should contain valRefProvider: () ⇒ ValueRef
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
-pub struct Key(pub Bytes);
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct ValueRef(pub Bytes);
-
-impl From<Key> for Bytes {
-    fn from(key: Key) -> Self {
-        key.0
-    }
-}
 
 impl From<ValueRef> for Bytes {
     fn from(val: ValueRef) -> Self {
@@ -104,7 +99,6 @@ impl OpeBTree {
 mod tests {
     use super::*;
     use crate::common::Hash;
-    use crate::common::ToBytes;
     use async_kvstore::hashmap_store::HashMapStore;
 
     fn create_tree(mut idx: usize) -> OpeBTree {
