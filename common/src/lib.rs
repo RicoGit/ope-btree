@@ -1,8 +1,11 @@
 //! Common structures and traits for all submodules. Maybe it's a temp solution.
 
+#[macro_use]
+extern crate serde_derive;
+
 use bytes::Bytes;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct Hash(pub Bytes);
 
 impl From<Hash> for Bytes {

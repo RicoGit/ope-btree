@@ -128,7 +128,6 @@ fn from_byte<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ope_btree::node::Node;
     use async_kvstore::hashmap_store::HashMapStore;
     use futures::prelude::*;
     use rmps::{Deserializer, Serializer};
@@ -136,18 +135,11 @@ mod tests {
 
     use super::BinaryNodeStore;
     use super::NodeStore;
+    use crate::ope_btree::node::Node;
+    use crate::ope_btree::node::TreeNode;
     use rmp_serde::decode::ReadReader;
 
-    fn create(mut idx: u64) -> BinaryNodeStore<u64, Node> {
-        let store = Box::new(HashMapStore::new());
-        BinaryNodeStore::new(
-            store,
-            Box::new(move || {
-                idx += 1;
-                idx
-            }),
-        )
-    }
+    use crate::ope_btree::node::tests as node_test;
 
     #[test]
     fn get_from_empty_store() {
@@ -162,9 +154,9 @@ mod tests {
         let mut store = create(0);
 
         let id = store.next_id();
-        let node = Node::new(10);
-        assert_eq!((), store.put(id, node.clone()).wait().unwrap());
-        assert_eq!(Some(node), store.get(&id).wait().unwrap());
+        let leaf: Node = Node::Leaf(node_test::create_leaf());
+        assert_eq!((), store.put(id, leaf.clone()).wait().unwrap());
+        assert_eq!(Some(leaf), store.get(&id).wait().unwrap());
     }
 
     #[test]
@@ -172,28 +164,40 @@ mod tests {
         let mut store = create(100);
 
         let id1 = store.next_id();
-        let node1 = Node::new(10);
+        let node1 = Node::Leaf(node_test::create_leaf());
         assert_eq!(None, store.get(&id1).wait().unwrap());
         assert_eq!((), store.put(id1, node1.clone()).wait().unwrap());
         assert_eq!(Some(node1.clone()), store.get(&id1).wait().unwrap());
         assert_eq!((), store.put(id1, node1.clone()).wait().unwrap());
         assert_eq!(Some(node1.clone()), store.get(&id1).wait().unwrap());
         let id2 = store.next_id();
-        let node2 = Node::new(20);
+        let node2 = Node::Branch(node_test::create_branch());
         assert_eq!((), store.put(id1, node2.clone()).wait().unwrap());
         assert_eq!(Some(node2.clone()), store.get(&id1).wait().unwrap());
         let id3 = store.next_id();
-        let node3 = Node::new(30);
+        let node3 = Node::Leaf(node_test::create_leaf());
         assert_eq!((), store.put(id3, node3.clone()).wait().unwrap());
         let id4 = store.next_id();
-        let node4 = Node::new(40);
+        let node4 = Node::Branch(node_test::create_branch());
         assert_eq!((), store.put(id4, node4.clone()).wait().unwrap());
         let id5 = store.next_id();
-        let node5 = Node::new(50);
+        let node5 = Node::Leaf(node_test::create_leaf());
         assert_eq!((), store.put(id5, node5.clone()).wait().unwrap());
         assert_eq!(Some(node4.clone()), store.get(&id4).wait().unwrap());
         assert_eq!(vec![id1, id2, id3, id4, id5], vec![101, 102, 103, 104, 105])
     }
 
     // todo add negative cases
+
+    fn create(mut idx: u64) -> BinaryNodeStore<u64, Node> {
+        let store = Box::new(HashMapStore::new());
+        BinaryNodeStore::new(
+            store,
+            Box::new(move || {
+                idx += 1;
+                idx
+            }),
+        )
+    }
+
 }

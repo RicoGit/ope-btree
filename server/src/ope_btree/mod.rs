@@ -5,6 +5,7 @@ pub mod node;
 pub mod node_store;
 
 use self::node::Node;
+use self::node::TreeNode;
 use self::node_store::BinaryNodeStore;
 use self::node_store::NodeStore;
 use async_kvstore::KVStore;
@@ -65,16 +66,10 @@ pub struct OpeBTree {
     config: OpeBTreeConf,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct Key(pub Bytes);
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct ValueRef(pub Bytes);
-
-impl From<Bytes> for Key {
-    fn from(bytes: Bytes) -> Self {
-        Key(bytes)
-    }
-}
 
 impl From<Key> for Bytes {
     fn from(key: Key) -> Self {
