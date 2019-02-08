@@ -36,3 +36,18 @@ impl<T: Into<Bytes>> ToBytes for T {
         self.into()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::ToBytes;
+    use crate::Hash;
+    use bytes::Bytes;
+
+    #[test]
+    fn key_valref_hash_converters() {
+        let origin = Bytes::from("hash");
+        let hash = Hash(origin.clone());
+        assert_eq!(origin.clone(), hash.bytes());
+    }
+
+}

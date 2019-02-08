@@ -1,9 +1,10 @@
 //! BTree implementation.
 //! todo more documentation when btree will be ready
 
-// module with persistent level for any tree
+pub mod node;
 pub mod node_store;
 
+use self::node::Node;
 use self::node_store::BinaryNodeStore;
 use self::node_store::NodeStore;
 use async_kvstore::KVStore;
@@ -104,42 +105,12 @@ impl OpeBTree {
     // todo traverse, remove
 }
 
-//
-// Node
-//
-
-#[derive(Debug, PartialOrd, PartialEq, Serialize, Deserialize, Clone)]
-pub struct Node {
-    pub size: usize,
-    // todo fill and remove pub
-}
-
-impl Node {
-    pub fn new(size: usize) -> Self {
-        Node { size }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::common::Hash;
     use crate::common::ToBytes;
-    use crate::ope_btree::Node;
     use async_kvstore::hashmap_store::HashMapStore;
-    use rmps::{Deserializer, Serializer};
-    use serde::{Deserialize, Serialize};
-
-    #[test]
-    fn node_serde_test() {
-        let node = Node { size: 13 };
-
-        let mut buf = Vec::new();
-        node.serialize(&mut Serializer::new(&mut buf)).unwrap();
-
-        let mut de = Deserializer::new(&buf[..]);
-        assert_eq!(node, Deserialize::deserialize(&mut de).unwrap());
-    }
 
     fn create_tree(mut idx: usize) -> OpeBTree {
         OpeBTree::new(
@@ -158,22 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn key_valref_hash_converters() {
-        let origin = Bytes::from("key");
-        let key: Key = Key(origin.clone());
-        assert_eq!(origin.clone(), key.bytes());
-        let value_ref = ValueRef(origin.clone());
-        assert_eq!(origin.clone(), value_ref.bytes());
-        let hash = Hash(origin.clone());
-        assert_eq!(origin.clone(), hash.bytes());
-    }
-
-    #[test]
     fn new_tree_test() {
-
         // todo
-
-        //        let tree: OpeBTree = create_tree(10);
-        //
     }
 }

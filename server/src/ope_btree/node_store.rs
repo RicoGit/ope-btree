@@ -128,7 +128,7 @@ fn from_byte<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ope_btree::Node;
+    use crate::ope_btree::node::Node;
     use async_kvstore::hashmap_store::HashMapStore;
     use futures::prelude::*;
     use rmps::{Deserializer, Serializer};
