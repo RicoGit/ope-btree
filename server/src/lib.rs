@@ -5,13 +5,14 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-extern crate async_kvstore;
-extern crate common;
-extern crate protocol;
+use async_kvstore;
+use common;
+use protocol;
+
+use serde;
 
 #[macro_use]
 extern crate error_chain;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate rmp_serde as rmps;
