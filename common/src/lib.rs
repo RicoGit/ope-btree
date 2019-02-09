@@ -5,6 +5,8 @@ extern crate serde_derive;
 
 pub mod merkle;
 pub mod misc;
+#[cfg(test)]
+pub mod noop_hasher;
 
 use bytes::Bytes;
 use misc::ToBytes;
