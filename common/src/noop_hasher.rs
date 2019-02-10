@@ -20,7 +20,7 @@ impl Digest for NoOpHasher {
     type OutputSize = U512; // allow {HASH_SIZE} bytes length result hash
 
     fn new() -> Self {
-        let mut data = Vec::with_capacity(HASH_SIZE);
+        let data = Vec::with_capacity(HASH_SIZE);
         NoOpHasher {
             wrapper: ('[', ']'),
             end_sign: 0_u8,
@@ -62,7 +62,7 @@ impl Digest for NoOpHasher {
         if data.len() < HASH_SIZE {
             // add zeroes to and of the vector. 'data' must have size == HASH_SIZE!
             let num = HASH_SIZE - data.len();
-            for n in 0..num {
+            for _ in 0..num {
                 data.push(b'_')
             }
         }
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn chain_test() {
-        let mut hasher = NoOpHasher::new();
+        let hasher = NoOpHasher::new();
         let result = hasher.chain("1").chain("_").chain("2").result();
         assert_eq!(Ok(String::from("[1_2]")), result.as_str());
     }

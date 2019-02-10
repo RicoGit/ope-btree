@@ -2,6 +2,8 @@
 
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate error_chain;
 
 pub mod merkle;
 pub mod misc;
@@ -10,6 +12,8 @@ pub mod noop_hasher;
 
 use bytes::Bytes;
 use misc::ToBytes;
+use sha3::digest::generic_array::ArrayLength;
+use sha3::digest::generic_array::GenericArray;
 
 /// A ciphered key for retrieve a value.
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
@@ -20,6 +24,11 @@ pub struct Key(pub Bytes);
 pub struct Hash(pub Bytes);
 
 impl Hash {
+    /// Returns empty hash.
+    pub fn empty() -> Self {
+        Hash(Bytes::new())
+    }
+
     /// Returns true is hash is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -39,6 +48,18 @@ impl Hash {
     }
 }
 
+impl<L: ArrayLength<u8>> From<GenericArray<u8, L>> for Hash {
+    fn from(ga: GenericArray<u8, L>) -> Self {
+        Hash(Bytes::from(ga.as_slice()))
+    }
+}
+
+impl AsRef<[u8]> for Hash {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Hash;
@@ -46,7 +67,7 @@ mod tests {
 
     #[test]
     fn is_empty_test() {
-        let empty = Hash(Bytes::new());
+        let empty = Hash::empty();
         assert!(empty.is_empty());
         let non_empty = hash("non empty");
         assert!(!non_empty.is_empty());
@@ -71,7 +92,7 @@ mod tests {
 
         let many = vec![hash("_A_"), hash("_B_")];
         let empty1 = vec![];
-        let empty2 = vec![Hash(Bytes::new())];
+        let empty2 = vec![Hash::empty()];
 
         one.concat_all(empty1);
         assert_eq!(hash("_1_"), one);
@@ -81,6 +102,22 @@ mod tests {
 
         one.concat_all(many);
         assert_eq!(hash("_1__A__B_"), one);
+    }
+
+    #[test]
+    fn hash_from_gen_arr_test() {
+        use sha3::digest::generic_array::typenum::U8;
+        use sha3::digest::generic_array::GenericArray;
+        let vec = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let ga: GenericArray<u8, U8> =
+            GenericArray::from_exact_iter(vec.clone().into_iter()).unwrap();
+
+        assert_eq!(Hash(Bytes::from(vec)), ga.into())
+    }
+
+    #[test]
+    fn hash_as_ref_test() {
+        assert_eq!("hash".as_bytes(), hash("hash").as_ref())
     }
 
     fn hash(str: &str) -> Hash {
