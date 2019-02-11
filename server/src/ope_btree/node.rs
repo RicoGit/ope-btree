@@ -1,6 +1,7 @@
 //! Implementation of Btree node.
 
 use crate::ope_btree::ValueRef;
+use bytes::Bytes;
 use common::{Hash, Key};
 use std::ops::Deref;
 
@@ -22,27 +23,27 @@ pub enum Node {
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct LeafNode {
     /// Search keys
-    keys: Vec<Key>,
+    pub keys: Vec<Key>,
 
     /// Stored values references
-    values_refs: Vec<ValueRef>,
+    pub values_refs: Vec<ValueRef>,
 
     /// Array of hashes for each encrypted stored value. **Not a hashes of value
     /// reference!**
-    values_hashes: Vec<Hash>,
+    pub values_hashes: Vec<Hash>,
 
     /// Array of hashes for each pair with key and value hash.
     /// 'hash(key + hash_of_value)' (optimization, decreases recalculation)
-    kv_hashes: Vec<Hash>,
+    pub kv_hashes: Vec<Hash>,
 
     /// Number of keys inside this leaf. Actually a size of each array in the leaf.
-    size: usize,
+    pub size: usize,
 
     /// The hash of the leaf state (the hash of concatenated `kv_hashes`)
-    hash: Hash,
+    pub hash: Hash,
 
     /// A reference to the right sibling leaf. Rightmost leaf don't have right sibling.
-    right_sibling: Option<NodeRef>,
+    pub right_sibling: Option<NodeRef>,
 }
 
 /// Branch node of the tree, do not contains any business values, contains
@@ -52,19 +53,19 @@ pub struct LeafNode {
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct BranchNode {
     /// Search keys
-    keys: Vec<Key>,
+    pub keys: Vec<Key>,
 
     /// Children references
-    children_refs: Vec<NodeRef>,
+    pub children_refs: Vec<NodeRef>,
 
     /// Array of hashes for each child node. **Not a checksum of child reference!**
-    children_hashes: Vec<Hash>,
+    pub children_hashes: Vec<Hash>,
 
     /// Number of keys inside this branch
-    size: usize,
+    pub size: usize,
 
     /// Hash of branch state
-    hash: Hash,
+    pub hash: Hash,
 }
 
 //
@@ -92,6 +93,18 @@ impl LeafNode {
 impl BranchNode {
     fn do_branch(&self) -> Hash {
         Hash(bytes::Bytes::from("branch")) // todo remove!
+    }
+}
+
+pub trait CloneAsBytes {
+    fn clone_as_bytes(&self) -> Vec<Bytes>;
+}
+
+use crate::common::misc::ToBytes;
+
+impl<T: ToBytes + Clone> CloneAsBytes for Vec<T> {
+    fn clone_as_bytes(&self) -> Vec<Bytes> {
+        self.iter().map(|key| key.clone().bytes()).collect()
     }
 }
 
@@ -164,5 +177,4 @@ pub mod tests {
             ],
         }
     }
-
 }

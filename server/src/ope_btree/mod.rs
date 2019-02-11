@@ -1,7 +1,7 @@
 //! BTree implementation.
 //! todo more documentation when btree will be ready
 
-pub mod command;
+pub mod commands;
 pub mod node;
 pub mod node_store;
 
@@ -9,6 +9,8 @@ use self::node::Node;
 use self::node::TreeNode;
 use self::node_store::BinaryNodeStore;
 use self::node_store::NodeStore;
+use crate::ope_btree::commands::BTreeCmd;
+use crate::ope_btree::commands::SearchCmd;
 use async_kvstore::KVStore;
 use bytes::Bytes;
 use common::Key;
@@ -16,6 +18,7 @@ use futures::Future;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
+use std::sync::Mutex;
 
 //
 // BTree
@@ -63,10 +66,28 @@ mod errors {
 ///
 /// [`NodeStore`]: ../node_store/trait.NodeStore.html
 /// [`BTreeCommand`]: ../command/trait.BTreeCommand.html
-pub struct OpeBTree {
-    node_store: Box<dyn NodeStore<usize, Node>>,
+pub struct OpeBTree<'t> {
+    node_store: Mutex<&'t mut NodeStore<usize, Node>>,
     config: OpeBTreeConf,
     // todo should contain valRefProvider: () ⇒ ValueRef
+}
+
+impl<'t> OpeBTree<'t> {
+    pub fn new(config: OpeBTreeConf, node_store: &'t mut NodeStore<usize, Node>) -> Self {
+        OpeBTree {
+            config,
+            node_store: Mutex::new(node_store),
+        }
+    }
+
+    fn get<'a, SCmd>(&self, cmd: SCmd) -> GetFuture<'a>
+    where
+        SCmd: SearchCmd + BTreeCmd,
+    {
+        unimplemented!()
+    }
+
+    // todo put, remove, traverse
 }
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
@@ -78,47 +99,36 @@ impl From<ValueRef> for Bytes {
     }
 }
 
-impl OpeBTree {
-    pub fn new(config: OpeBTreeConf, node_store: Box<dyn NodeStore<usize, Node>>) -> Self {
-        OpeBTree { config, node_store }
-    }
-
-    // todo  change key  to cmd
-    pub fn get<'a>(&self, key: Key) -> GetFuture<'a> {
-        unimplemented!()
-    }
-
-    pub fn put<'a>(&mut self, key: Key, val: ValueRef) -> GetFuture<'a> {
-        unimplemented!()
-    }
-
-    // todo traverse, remove
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::common::Hash;
     use async_kvstore::hashmap_store::HashMapStore;
 
-    fn create_tree(mut idx: usize) -> OpeBTree {
+    fn create_node_store(mut idx: usize) -> impl NodeStore<usize, Node> {
+        BinaryNodeStore::new(
+            Box::new(HashMapStore::new()),
+            Box::new(move || {
+                idx += 1;
+                idx
+            }),
+        )
+    }
+
+    fn create_tree(store: &mut NodeStore<usize, Node>) -> OpeBTree {
         OpeBTree::new(
             OpeBTreeConf {
                 arity: 8,
                 alpha: 0.25_f32,
             },
-            Box::new(BinaryNodeStore::new(
-                Box::new(HashMapStore::new()),
-                Box::new(move || {
-                    idx += 1;
-                    idx
-                }),
-            )),
+            store,
         )
     }
 
     #[test]
     fn new_tree_test() {
+        let mut node_store = create_node_store(0);
+        let tree = create_tree(&mut node_store);
         // todo
     }
 }

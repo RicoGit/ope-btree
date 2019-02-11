@@ -1,5 +1,7 @@
 //! Commands that OpeBtree can perform.
 
+pub mod search_cmd;
+
 use super::node::BranchNode;
 use crate::ope_btree::node::LeafNode;
 use common::merkle::MerklePath;
@@ -8,10 +10,10 @@ use futures::Future;
 use protocol::{ClientPutDetails, SearchResult};
 
 /// Future that carries the Command result.
-type CmdFuture<'f, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 'f>;
+pub type CmdFuture<'f, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 'f>;
 
 /// Root functionality for all OpeBTree commands.
-trait BTreeCommand {
+pub trait BTreeCmd {
     /// Returns a next child index to makes the next step down the tree.
     /// The BTree client searches for required key in the keys of this branch
     /// and returns index.
@@ -20,25 +22,25 @@ trait BTreeCommand {
     ///
     /// * `branch` -  A branch node of OpeBTree for searching.
     ///
-    fn next_child_idx<'f>(branch: BranchNode) -> CmdFuture<'f, usize>;
+    fn next_child_idx<'f>(&self, branch: &'f BranchNode) -> CmdFuture<'f, usize>;
 }
 
 /// A command for a searching some value in OpeBTree (by a client search key).
-/// Search key is always stored at the client.
-trait SearchCommand: BTreeCommand {
+/// Search key is always stored at the client. Server will never know search key.
+pub trait SearchCmd: BTreeCmd {
     /// A tree sends required leaf with all keys and hashes of values to the client.
     /// If a tree hasn't any leafs - sends None. Client returns a result of searching
-    /// client's key among keys of the current leaf.
+    /// client's key among keys of the current leaf or None if leaf was None.
     ///
     /// # Arguments
     ///
     /// * `leaf` -  A leaf node of OpeBTree for searching.
     ///
-    fn submit_leaf<'f>(leaf: Option<LeafNode>) -> CmdFuture<'f, SearchResult>;
+    fn submit_leaf<'f>(&self, leaf: Option<&'f LeafNode>) -> CmdFuture<'f, Option<SearchResult>>;
 }
 
 /// Command for inserting key and value to the OpeBTree.
-trait PutCommand: BTreeCommand {
+pub trait PutCmd: BTreeCmd {
     /// Returns all details needed for inserting a key-value to the OpeBTree.
     ///
     /// # Arguments
@@ -59,5 +61,10 @@ trait PutCommand: BTreeCommand {
 }
 
 mod errors {
-    error_chain! {}
+    error_chain! {
+         links {
+            // Wraps protocol error
+            CmdError(protocol::errors::Error, protocol::errors::ErrorKind);
+        }
+    }
 }

@@ -21,7 +21,7 @@ pub type SearchResult = result::Result<usize, usize>;
 type RpcFuture<'f, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 'f>;
 
 /// Base parent for all callback wrappers needed for any BTree's operation.
-trait BtreeCallback {
+pub trait BtreeCallback {
     /// Server asks next child node index(position).
     ///
     /// # Arguments
@@ -33,13 +33,17 @@ trait BtreeCallback {
     ///
     /// Next child node position.
     ///
-    fn next_child_idx<'f>(keys: Vec<Bytes>, child_hashes: Vec<Bytes>) -> RpcFuture<'f, usize>;
+    fn next_child_idx<'f>(
+        &self,
+        keys: Vec<Bytes>,
+        child_hashes: Vec<Bytes>,
+    ) -> RpcFuture<'f, usize>;
 }
 
 /// Wrapper for all callbacks needed for BTree's search operation.
 /// Each callback corresponds to an operation needed btree for traversing and
 /// getting index.
-trait SearchCallback: BtreeCallback {
+pub trait SearchCallback: BtreeCallback {
     /// Server sends found leaf details.
     ///
     /// # Arguments
@@ -51,13 +55,20 @@ trait SearchCallback: BtreeCallback {
     ///
     /// A result of searching client key in a current branch keys.
     ///
-    fn submit_leaf<'f>(keys: Vec<Bytes>, values_hashes: Vec<Bytes>) -> RpcFuture<'f, SearchResult>;
+    fn submit_leaf<'f>(
+        &self,
+        keys: Vec<Bytes>,
+        values_hashes: Vec<Bytes>,
+    ) -> RpcFuture<'f, Option<SearchResult>>;
+
+    /// Server sends that leaf wasn't found.
+    fn leaf_not_found<'f>(&self) -> RpcFuture<'f, Option<SearchResult>>;
 }
 
 /// Wrapper for all callbacks needed for BTree's ''Put'' operation.
 /// Each callback corresponds to operation needed btree for traversing
 /// and inserting value.
-trait PutCallbacks: BtreeCallback {
+pub trait PutCallbacks: BtreeCallback {
     /// Server sends founded leaf details.
     ///
     /// # Arguments
@@ -105,7 +116,7 @@ pub struct ClientPutDetails {
 
 // todo add callback for remove operation
 
-mod errors {
+pub mod errors {
     error_chain! {
         errors {
             RpcError(msg:  String) {
