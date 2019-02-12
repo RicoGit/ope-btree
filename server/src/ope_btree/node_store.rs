@@ -44,8 +44,9 @@ mod errors {
 type SFuture<'s, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 's>;
 
 /// BTree persistence store API.
-pub trait NodeStore<Id, Node>
+pub trait NodeStore<Id, Node>: Send
 where
+    Id: Send,
     Node: Serialize + Send,
 {
     /// Returns next surrogate Id for storing new node.
@@ -59,14 +60,17 @@ where
     fn put(&mut self, node_id: Id, node: Node) -> SFuture<()>;
 }
 
-pub struct BinaryNodeStore<Id, Node> {
-    store: Box<KVStore<Vec<u8>, Vec<u8>>>,
-    id_generator: Box<FnMut() -> Id>, // todo Result? Is Error is possible here ?
-    _phantom: PhantomData<Node>,      // needed for keeping Node type
+pub struct BinaryNodeStore<Id: Send, Node: Send> {
+    store: Box<dyn KVStore<Vec<u8>, Vec<u8>> + Sync>,
+    id_generator: Box<dyn FnMut() -> Id + Send + Sync>, // todo Result? Is Error is possible here ?
+    _phantom: PhantomData<Node>,
 }
 
-impl<Id, Node: Send> BinaryNodeStore<Id, Node> {
-    pub fn new(store: Box<KVStore<Vec<u8>, Vec<u8>>>, id_generator: Box<FnMut() -> Id>) -> Self {
+impl<Id: Send, Node: Send> BinaryNodeStore<Id, Node> {
+    pub fn new(
+        store: Box<KVStore<Vec<u8>, Vec<u8>> + Sync>,
+        id_generator: Box<FnMut() -> Id + Send + Sync>,
+    ) -> Self {
         BinaryNodeStore {
             store,
             id_generator,
@@ -76,10 +80,10 @@ impl<Id, Node: Send> BinaryNodeStore<Id, Node> {
 }
 
 /// Stores tree nodes in the binary key-value store.
-impl<Id, Node: Send> NodeStore<Id, Node> for BinaryNodeStore<Id, Node>
+impl<Id, Node> NodeStore<Id, Node> for BinaryNodeStore<Id, Node>
 where
-    Id: Serialize + DeserializeOwned,
-    Node: Serialize + DeserializeOwned,
+    Id: Serialize + DeserializeOwned + Send,
+    Node: Serialize + DeserializeOwned + Send,
 {
     fn next_id(&mut self) -> Id {
         (self.id_generator)()
@@ -140,6 +144,23 @@ mod tests {
     use rmp_serde::decode::ReadReader;
 
     use crate::ope_btree::node::tests as node_test;
+    use async_kvstore::KVStore;
+    use bytes::Bytes;
+    use std::sync::Arc;
+
+    #[test]
+    fn send_test() {
+        let store: Box<Send> = Box::new(create(0));
+    }
+
+    #[test]
+    fn sync_dyn_test() {
+        let store: Arc<dyn NodeStore<u64, Node> + Sync> = Arc::new(create(0));
+        fn take<T: Send>(_it: T) {
+            ()
+        };
+        take(store);
+    }
 
     #[test]
     fn get_from_empty_store() {
@@ -199,5 +220,4 @@ mod tests {
             }),
         )
     }
-
 }
