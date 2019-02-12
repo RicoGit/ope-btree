@@ -44,7 +44,7 @@ mod errors {
 type SFuture<'s, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 's>;
 
 /// BTree persistence store API.
-pub trait NodeStore<Id, Node>: Send
+pub trait NodeStore<Id, Node>: Send + Sync
 where
     Id: Send,
     Node: Serialize + Send,
@@ -60,17 +60,25 @@ where
     fn put(&mut self, node_id: Id, node: Node) -> SFuture<()>;
 }
 
-pub struct BinaryNodeStore<Id: Send, Node: Send> {
-    store: Box<dyn KVStore<Vec<u8>, Vec<u8>> + Sync>,
-    id_generator: Box<dyn FnMut() -> Id + Send + Sync>, // todo Result? Is Error is possible here ?
+pub struct BinaryNodeStore<Id, Node, Store>
+where
+    Id: Send,
+    Node: Send,
+    Store: KVStore<Vec<u8>, Vec<u8>>,
+{
+    store: Store,
+    // todo Result? Is Error is possible here ? todo static dispatch?
+    id_generator: Box<dyn FnMut() -> Id + Send + Sync>,
     _phantom: PhantomData<Node>,
 }
 
-impl<Id: Send, Node: Send> BinaryNodeStore<Id, Node> {
-    pub fn new(
-        store: Box<KVStore<Vec<u8>, Vec<u8>> + Sync>,
-        id_generator: Box<FnMut() -> Id + Send + Sync>,
-    ) -> Self {
+impl<Id, Node, Store> BinaryNodeStore<Id, Node, Store>
+where
+    Id: Send,
+    Node: Send,
+    Store: KVStore<Vec<u8>, Vec<u8>>,
+{
+    pub fn new(store: Store, id_generator: Box<FnMut() -> Id + Send + Sync>) -> Self {
         BinaryNodeStore {
             store,
             id_generator,
@@ -80,10 +88,11 @@ impl<Id: Send, Node: Send> BinaryNodeStore<Id, Node> {
 }
 
 /// Stores tree nodes in the binary key-value store.
-impl<Id, Node> NodeStore<Id, Node> for BinaryNodeStore<Id, Node>
+impl<Id, Node, Store> NodeStore<Id, Node> for BinaryNodeStore<Id, Node, Store>
 where
-    Id: Serialize + DeserializeOwned + Send,
-    Node: Serialize + DeserializeOwned + Send,
+    Id: Serialize + DeserializeOwned + Send + Sync,
+    Node: Serialize + DeserializeOwned + Send + Sync,
+    Store: KVStore<Vec<u8>, Vec<u8>>,
 {
     fn next_id(&mut self) -> Id {
         (self.id_generator)()
@@ -101,7 +110,7 @@ where
                     .map_err(Into::into)
                     .and_then(|node_bytes_opt| match node_bytes_opt {
                         None => future::ok(None),
-                        Some(node_raw) => future::result(from_byte(node_raw).map(Some)),
+                        Some(node_raw) => future::result(from_byte(&node_raw).map(Some)),
                     });
 
                 Box::new(res)
@@ -149,17 +158,8 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn send_test() {
-        let store: Box<Send> = Box::new(create(0));
-    }
-
-    #[test]
     fn sync_dyn_test() {
-        let store: Arc<dyn NodeStore<u64, Node> + Sync> = Arc::new(create(0));
-        fn take<T: Send>(_it: T) {
-            ()
-        };
-        take(store);
+        let _store: Arc<Send + Sync> = Arc::new(create(0));
     }
 
     #[test]
@@ -210,8 +210,8 @@ mod tests {
 
     // todo add negative cases
 
-    fn create(mut idx: u64) -> BinaryNodeStore<u64, Node> {
-        let store = Box::new(HashMapStore::new());
+    fn create(mut idx: u64) -> impl NodeStore<u64, Node> {
+        let store = HashMapStore::new();
         BinaryNodeStore::new(
             store,
             Box::new(move || {

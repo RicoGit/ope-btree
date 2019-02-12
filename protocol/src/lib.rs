@@ -21,7 +21,7 @@ pub type SearchResult = result::Result<usize, usize>;
 type RpcFuture<'f, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 'f>;
 
 /// Base parent for all callback wrappers needed for any BTree's operation.
-pub trait BtreeCallback {
+pub trait BtreeCallback: Send {
     /// Server asks next child node index(position).
     ///
     /// # Arguments

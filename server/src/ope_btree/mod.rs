@@ -15,6 +15,7 @@ use async_kvstore::KVStore;
 use bytes::Bytes;
 use common::Key;
 use futures::Future;
+use futures_locks::RwLock;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -29,15 +30,13 @@ type GetFuture<'a> = Box<dyn Future<Item = ValueRef, Error = errors::Error> + Se
 /// Configuration for OpeBtree.
 pub struct OpeBTreeConf {
     /// Maximum size of nodes (maximum number children in branches)
-    arity: u8,
+    pub arity: u8,
     /// Minimum capacity factor of node. Should be between 0 and 0.5. 0.25 means that
     /// each node except root should always contains between 25% and 100% children.
-    alpha: f32,
+    pub alpha: f32,
 }
 
-// todo errors
-
-mod errors {
+pub mod errors {
     error_chain! {}
 }
 
@@ -66,21 +65,27 @@ mod errors {
 ///
 /// [`NodeStore`]: ../node_store/trait.NodeStore.html
 /// [`BTreeCommand`]: ../command/trait.BTreeCommand.html
-pub struct OpeBTree<'t> {
-    node_store: Mutex<&'t mut NodeStore<usize, Node>>,
+pub struct OpeBTree<NS>
+where
+    NS: NodeStore<usize, Node>,
+{
+    node_store: RwLock<NS>,
     config: OpeBTreeConf,
     // todo should contain valRefProvider: () ⇒ ValueRef
 }
 
-impl<'t> OpeBTree<'t> {
-    pub fn new(config: OpeBTreeConf, node_store: &'t mut NodeStore<usize, Node>) -> Self {
+impl<NS> OpeBTree<NS>
+where
+    NS: NodeStore<usize, Node>,
+{
+    pub fn new(config: OpeBTreeConf, node_store: NS) -> Self {
         OpeBTree {
             config,
-            node_store: Mutex::new(node_store),
+            node_store: RwLock::new(node_store),
         }
     }
 
-    fn get<'a, SCmd>(&self, cmd: SCmd) -> GetFuture<'a>
+    pub fn get<'a, SCmd>(&self, cmd: SCmd) -> GetFuture<'a>
     where
         SCmd: SearchCmd + BTreeCmd,
     {
@@ -107,7 +112,7 @@ mod tests {
 
     fn create_node_store(mut idx: usize) -> impl NodeStore<usize, Node> {
         BinaryNodeStore::new(
-            Box::new(HashMapStore::new()),
+            HashMapStore::new(),
             Box::new(move || {
                 idx += 1;
                 idx
@@ -115,7 +120,7 @@ mod tests {
         )
     }
 
-    fn create_tree(store: &mut NodeStore<usize, Node>) -> OpeBTree {
+    fn create_tree<NS: NodeStore<usize, Node>>(store: NS) -> OpeBTree<NS> {
         OpeBTree::new(
             OpeBTreeConf {
                 arity: 8,
@@ -127,8 +132,9 @@ mod tests {
 
     #[test]
     fn new_tree_test() {
-        let mut node_store = create_node_store(0);
-        let tree = create_tree(&mut node_store);
+        let node_store = create_node_store(0);
+        let _tree = create_tree(node_store);
         // todo
+        // tree.get()
     }
 }
