@@ -14,6 +14,18 @@ pub enum Node {
     Branch(BranchNode),
 }
 
+impl Node {
+    /// Creates and returns a new empty Leaf.
+    pub fn empty_leaf() -> Node {
+        Node::Leaf(LeafNode::new())
+    }
+
+    /// Creates and returns a new empty Branch.
+    pub fn empty_branch() -> Node {
+        Node::Branch(BranchNode::new())
+    }
+}
+
 /// A leaf element of the tree, contains references of stored values with
 /// corresponding keys and other supporting data. All leaves are located at the
 /// same depth (maximum depth) in the tree. All arrays are in a one to one
@@ -84,15 +96,31 @@ pub trait TreeNode {
     fn hash() -> Hash;
 }
 
-impl LeafNode {
-    fn do_leaf(&self) -> Hash {
-        Hash(bytes::Bytes::from("leaf")) // todo remove!
+impl LeafNode { // todo derive Default?
+    /// Creates and returns a new empty LeafNode.
+    pub fn new() -> Self {
+        LeafNode {
+            keys: vec![],
+            values_refs: vec![],
+            values_hashes: vec![],
+            kv_hashes: vec![],
+            size: 0,
+            hash: Hash::empty(),
+            right_sibling: None,
+        }
     }
 }
 
 impl BranchNode {
-    fn do_branch(&self) -> Hash {
-        Hash(bytes::Bytes::from("branch")) // todo remove!
+    /// Creates and returns a new empty BranchNode.
+    pub fn new() -> Self {
+        BranchNode {
+            keys: vec![],
+            children_refs: vec![],
+            children_hashes: vec![],
+            size: 0,
+            hash: Hash::empty(),
+        }
     }
 }
 
@@ -138,19 +166,6 @@ pub mod tests {
 
         let mut de = Deserializer::new(&buf[..]);
         assert_eq!(branch, Deserialize::deserialize(&mut de).unwrap());
-    }
-
-    #[test]
-    fn layout() {
-        // todo remove later
-        let node = Node::Leaf(create_leaf());
-
-        match node {
-            Node::Leaf(leaf) => leaf.do_leaf(),
-            Node::Branch(branch) => branch.do_branch(),
-        };
-
-        dbg!(std::mem::size_of::<Node>());
     }
 
     pub fn create_leaf() -> LeafNode {

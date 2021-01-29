@@ -18,7 +18,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Add;
 
-mod errors {
+pub mod errors {
     use futures::Future;
     use std::error;
     error_chain! {
@@ -53,11 +53,11 @@ where
     fn next_id(&mut self) -> Id; // todo maybe wrap to Future or/and Result?
 
     /// Gets stored node for specified id.
-    fn get(&self, node_id: &Id) -> SFuture<Option<Node>>;
+    fn get<'a: 's, 's>(&'s self, node_id: &Id) -> SFuture<'a, Option<Node>>;
 
     /// Stores the specified node with the specified id.
     /// Rewrite existing value if it's present.
-    fn put(&mut self, node_id: Id, node: Node) -> SFuture<()>;
+    fn put<'a: 's, 's>(&'s mut self, node_id: Id, node: Node) -> SFuture<'a, ()>;
 }
 
 pub struct BinaryNodeStore<Id, Node, Store>
@@ -91,16 +91,15 @@ where
 impl<Id, Node, Store> NodeStore<Id, Node> for BinaryNodeStore<Id, Node, Store>
 where
     Id: Serialize + DeserializeOwned + Send + Sync,
-    Node: Serialize + DeserializeOwned + Send + Sync,
+    Node: Serialize + DeserializeOwned + Send + Sync + 'static,
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
     fn next_id(&mut self) -> Id {
         (self.id_generator)()
     }
 
-    fn get(&self, node_id: &Id) -> SFuture<Option<Node>> {
+    fn get<'a: 's, 's>(&'s self, node_id: &Id) -> SFuture<'a, Option<Node>> {
         // todo consider chaining error with better error explanation
-
         match to_byte(&node_id) {
             Err(err) => Box::new(future::failed(err)),
             Ok(id) => {
@@ -118,7 +117,7 @@ where
         }
     }
 
-    fn put(&mut self, node_id: Id, node: Node) -> SFuture<()> {
+    fn put<'a: 's, 's>(&'s mut self, node_id: Id, node: Node) -> SFuture<'a, ()> {
         // todo do lazy (wrap all in future) Arc  might help!
         let result = to_byte(&node_id)
             .and_then(|id| to_byte(node).map(|n| (id, n)))

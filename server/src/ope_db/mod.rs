@@ -26,7 +26,7 @@ use crate::ope_btree::node_store::NodeStore;
 
 pub struct OpeDatabase<NS, VS>
 where
-    NS: NodeStore<usize, Node>,
+    NS: NodeStore<usize, Node> + 'static,
     VS: KVStore<Bytes, Bytes>,
 {
     /// Ope Btree index.
@@ -105,8 +105,7 @@ mod tests {
     #[test]
     fn get_test() {
         let db = create_db();
-        // todo test
-        //        db.get()
+        // todo test later
     }
 
     // todo write more test cases

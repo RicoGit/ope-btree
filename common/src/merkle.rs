@@ -37,6 +37,7 @@ pub struct NodeProof {
     children_hashes: Vec<Hash>,
     /// An index for a substitution some child hash to `children_hashes`
     substitution_idx: usize,
+    // todo looks like substitution_idx isn't required for leaf proof
 }
 
 impl NodeProof {
@@ -97,6 +98,9 @@ impl NodeProof {
                 state_hash
             }
         };
+
+        // todo I'm not sure, check this invariant
+        assert!(!state.is_empty(), "Empty NodeProof doesn't make any sense");
 
         hasher.input(state);
         hasher.result().into()
