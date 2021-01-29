@@ -1,17 +1,14 @@
 //! Common structures and traits for all submodules. Maybe it's a temp solution.
 
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate error_chain;
-
 pub mod merkle;
 pub mod misc;
+
 #[cfg(test)]
 pub mod noop_hasher;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use misc::ToBytes;
+use serde::{Deserialize, Serialize};
 use sha3::digest::generic_array::ArrayLength;
 use sha3::digest::generic_array::GenericArray;
 
@@ -21,12 +18,12 @@ pub struct Key(pub Bytes);
 
 /// A hash of anything.
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
-pub struct Hash(pub Bytes);
+pub struct Hash(pub BytesMut);
 
 impl Hash {
     /// Returns empty hash.
     pub fn empty() -> Self {
-        Hash(Bytes::new())
+        Hash(BytesMut::new())
     }
 
     /// Returns true is hash is empty.
@@ -50,7 +47,7 @@ impl Hash {
 
 impl<L: ArrayLength<u8>> From<GenericArray<u8, L>> for Hash {
     fn from(ga: GenericArray<u8, L>) -> Self {
-        Hash(Bytes::from(ga.as_slice()))
+        Hash(BytesMut::from(ga.as_slice()))
     }
 }
 
@@ -63,7 +60,7 @@ impl AsRef<[u8]> for Hash {
 #[cfg(test)]
 mod tests {
     use crate::Hash;
-    use bytes::Bytes;
+    use bytes::BytesMut;
 
     #[test]
     fn is_empty_test() {
@@ -75,7 +72,7 @@ mod tests {
 
     #[test]
     fn concat_test() {
-        let empty = Hash(Bytes::new());
+        let empty = Hash::empty();
         let mut one = hash("_1_");
         let two = hash("_2_");
 
@@ -112,7 +109,7 @@ mod tests {
         let ga: GenericArray<u8, U8> =
             GenericArray::from_exact_iter(vec.clone().into_iter()).unwrap();
 
-        assert_eq!(Hash(Bytes::from(vec)), ga.into())
+        assert_eq!(Hash(BytesMut::from(vec.as_slice())), ga.into())
     }
 
     #[test]
@@ -121,6 +118,6 @@ mod tests {
     }
 
     fn hash(str: &str) -> Hash {
-        Hash(Bytes::from(str))
+        Hash(BytesMut::from(str))
     }
 }

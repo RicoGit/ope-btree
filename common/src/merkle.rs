@@ -1,11 +1,17 @@
 use super::Hash;
+use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
-mod errors {
-    error_chain! {}
+use thiserror::Error;
+
+/// Merkle errors
+#[derive(Error, Debug)]
+pub enum MerkleError {
+    #[error("Index Error: {msg:?}")]
+    IndexErr { msg: String },
 }
 
-use errors::*;
+pub type Result<V> = std::result::Result<V, MerkleError>;
 
 /// Contains all information needed for recalculating hash of some OpeTree node.
 ///
@@ -42,18 +48,19 @@ pub struct NodeProof {
 
 impl NodeProof {
     /// Validates params and create `NodeProof`.
-    pub fn new(
+    pub fn try_new(
         state_hash: Hash,
         children_hashes: Vec<Hash>,
         substitution_idx: usize,
     ) -> Result<Self> {
         if substitution_idx >= children_hashes.len() {
-            bail!(
-                "Substitution index have to be less than number of children \
-                 hashes {}, but actually it is {}",
-                children_hashes.len(),
-                substitution_idx
-            )
+            return Err(MerkleError::IndexErr {
+                msg: format!(
+                    "Substitution index have to be less than number of children hashes {}, but actually it is {}",
+                    children_hashes.len(),
+                    substitution_idx
+                ),
+            });
         }
 
         Ok(NodeProof {
@@ -102,8 +109,8 @@ impl NodeProof {
         // todo I'm not sure, check this invariant
         assert!(!state.is_empty(), "Empty NodeProof doesn't make any sense");
 
-        hasher.input(state);
-        hasher.result().into()
+        hasher.update(state);
+        hasher.finalize().into()
     }
 }
 
@@ -128,19 +135,19 @@ mod tests {
     use crate::merkle::NodeProof;
     use crate::misc::ToBytes;
     use crate::Hash;
-    use bytes::Bytes;
+    use bytes::BytesMut;
     use sha3::Digest;
     use sha3::Sha3_256;
 
     #[test]
     fn node_proof_new_err_test() {
-        let proof = NodeProof::new(Hash::empty(), Vec::new(), 10);
+        let proof = NodeProof::try_new(Hash::empty(), Vec::new(), 10);
         assert!(proof.is_err())
     }
 
     #[test]
     fn node_proof_new_ok_test() {
-        let proof = NodeProof::new(Hash::empty(), vec![Hash::empty()], 0);
+        let proof = NodeProof::try_new(Hash::empty(), vec![Hash::empty()], 0);
         let expected = NodeProof {
             state_hash: Hash::empty(),
             children_hashes: vec![Hash::empty()],
@@ -206,13 +213,13 @@ mod tests {
 
     fn node_proof(state: &str) -> NodeProof {
         NodeProof {
-            state_hash: Hash(Bytes::from(state)),
+            state_hash: Hash(BytesMut::from(state)),
             children_hashes: vec![hash("child1"), hash("child2"), hash("child3")],
             substitution_idx: 1,
         }
     }
 
     fn hash(str: &str) -> Hash {
-        Hash(Bytes::from(str))
+        Hash(BytesMut::from(str))
     }
 }

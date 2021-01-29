@@ -2,6 +2,7 @@
 
 use sha3::digest::generic_array::typenum::U512;
 use sha3::digest::generic_array::GenericArray;
+use sha3::digest::Output;
 use sha3::Digest;
 use std::string::ToString;
 
@@ -28,26 +29,41 @@ impl Digest for NoOpHasher {
         }
     }
 
-    fn input<B: AsRef<[u8]>>(&mut self, data: B) {
+    fn chain(mut self, data: impl AsRef<[u8]>) -> Self
+    where
+        Self: Sized,
+    {
+        self.update(data);
+        self
+    }
+
+    fn reset(&mut self) {
+        self.data.clear()
+    }
+
+    fn output_size() -> usize {
+        HASH_SIZE
+    }
+
+    fn digest(data: &[u8]) -> GenericArray<u8, Self::OutputSize> {
+        let mut hasher = Self::new();
+        hasher.update(data);
+        hasher.finalize()
+    }
+
+    fn update(&mut self, data: impl AsRef<[u8]>) {
         if self.data.is_empty() {
             self.data.push(b'[')
         }
         self.data.extend_from_slice(data.as_ref());
     }
 
-    fn chain<B: AsRef<[u8]>>(mut self, data: B) -> Self
-    where
-        Self: Sized,
-    {
-        self.input(data);
-        self
+    fn finalize(self) -> Output<Self> {
+        let mut this = self;
+        this.finalize_reset()
     }
 
-    fn result(mut self) -> GenericArray<u8, Self::OutputSize> {
-        self.result_reset()
-    }
-
-    fn result_reset(&mut self) -> GenericArray<u8, Self::OutputSize> {
+    fn finalize_reset(&mut self) -> Output<Self> {
         let NoOpHasher {
             wrapper,
             end_sign,
@@ -80,20 +96,6 @@ impl Digest for NoOpHasher {
             HASH_SIZE
         ))
     }
-
-    fn reset(&mut self) {
-        self.data.clear()
-    }
-
-    fn output_size() -> usize {
-        HASH_SIZE
-    }
-
-    fn digest(data: &[u8]) -> GenericArray<u8, Self::OutputSize> {
-        let mut hasher = Self::new();
-        hasher.input(data);
-        hasher.result()
-    }
 }
 
 pub trait AsString {
@@ -118,37 +120,37 @@ mod tests {
     #[test]
     fn input_test() {
         let mut hasher = NoOpHasher::new();
-        hasher.input("test");
-        let result = hasher.result();
+        hasher.update("test");
+        let result = hasher.finalize();
         assert_eq!(Ok(String::from("[test]")), result.as_str());
     }
 
     #[test]
     fn chain_test() {
         let hasher = NoOpHasher::new();
-        let result = hasher.chain("1").chain("_").chain("2").result();
+        let result = hasher.chain("1").chain("_").chain("2").finalize();
         assert_eq!(Ok(String::from("[1_2]")), result.as_str());
     }
 
     #[test]
     fn reset_test() {
         let mut hasher = NoOpHasher::new();
-        hasher.input("test");
+        hasher.update("test");
         hasher.reset();
-        let result = hasher.result();
+        let result = hasher.finalize();
         assert_eq!(Ok(String::from("")), result.as_str())
     }
 
     #[test]
     fn result_reset_test() {
         let mut hasher = NoOpHasher::new();
-        hasher.input("test");
-        let result1 = hasher.result_reset();
+        hasher.update("test");
+        let result1 = hasher.finalize_reset();
         assert_eq!(Ok(String::from("[test]")), result1.as_str());
-        let result2 = hasher.result_reset();
+        let result2 = hasher.finalize_reset();
         assert_eq!(Ok(String::from("")), result2.as_str());
-        hasher.input("dog");
-        let result3 = hasher.result_reset();
+        hasher.update("dog");
+        let result3 = hasher.finalize_reset();
         assert_eq!(Ok(String::from("[dog]")), result3.as_str());
     }
 
@@ -163,8 +165,8 @@ mod tests {
     fn big_hash_test() {
         let mut hasher = NoOpHasher::new();
 
-        hasher.input(big_str(1000));
-        let result: String = hasher.result().as_str().unwrap();
+        hasher.update(big_str(1000));
+        let result: String = hasher.finalize().as_str().unwrap();
         assert_eq!(NoOpHasher::output_size(), result.len());
         assert!(result.starts_with("[0123456789"))
     }
