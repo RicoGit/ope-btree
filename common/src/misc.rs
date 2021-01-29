@@ -21,6 +21,7 @@ impl From<Hash> for Bytes {
 /// # use bytes::Bytes;
 /// # use crate::common::Hash;
 /// # use crate::common::misc::ToBytes;
+///
 /// let h1 = Hash(Bytes::from("hash"));
 /// let h2 = Hash(Bytes::from("hash"));
 /// let bytes1 = h1.0;        // 0 is hard to read
@@ -50,5 +51,4 @@ mod test {
         let hash = Hash(origin.clone());
         assert_eq!(origin.clone(), hash.bytes());
     }
-
 }

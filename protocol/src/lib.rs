@@ -1,13 +1,24 @@
 //! OpeBtree Rpc protocol.
 
-#![allow(dead_code)]
+#![allow(dead_code)] // todo remove later
 
-use bytes::Bytes;
-use futures::Future;
+use std::future::Future;
 use std::result;
 
-#[macro_use]
-extern crate error_chain;
+use bytes::Bytes;
+use thiserror::Error;
+
+/// Protocol errors
+#[derive(Error, Debug)]
+pub enum ProtocolError {
+    #[error("Rpc Error: {msg:?}")]
+    RpcError { msg: String },
+}
+
+type Result<V> = result::Result<V, ProtocolError>;
+
+/// Future that carries result of Rpc call.
+pub type RpcFuture<'f, V> = Box<dyn Future<Output = Result<V>> + Send + 'f>;
 
 /// A result of searching some key in an array of keys.
 ///
@@ -17,12 +28,9 @@ extern crate error_chain;
 /// while maintaining sorted order.
 pub type SearchResult = result::Result<usize, usize>;
 
-/// Future that carries result of Rpc call.
-type RpcFuture<'f, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 'f>;
-
 /// Base parent for all callback wrappers needed for any BTree's operation.
 pub trait BtreeCallback: Send {
-    /// Server asks next child node index(position).
+    /// Server asks next child node index (position).
     ///
     /// # Arguments
     ///
@@ -41,7 +49,7 @@ pub trait BtreeCallback: Send {
 }
 
 /// Wrapper for all callbacks needed for BTree's search operation.
-/// Each callback corresponds to an operation needed btree for traversing and
+/// Each callback corresponds to an operation needed Btree for traversing and
 /// getting index.
 pub trait SearchCallback: BtreeCallback {
     /// Server sends found leaf details.
@@ -65,6 +73,18 @@ pub trait SearchCallback: BtreeCallback {
     fn leaf_not_found<'f>(&self) -> RpcFuture<'f, Option<SearchResult>>;
 }
 
+/// A structure for holding all client details needed for inserting a key and a
+/// value to the OpeBTree.
+pub struct ClientPutDetails {
+    /// The key that will be placed to the BTree
+    key: Bytes,
+    /// Hash of value that will be placed to the BTree
+    val_hash: Bytes,
+    /// A result of searching client's key among keys of the leaf in which the
+    /// new key and value will be inserted. Contains an index for inserting.
+    search_result: SearchResult,
+}
+
 /// Wrapper for all callbacks needed for BTree's ''Put'' operation.
 /// Each callback corresponds to operation needed btree for traversing
 /// and inserting value.
@@ -81,6 +101,7 @@ pub trait PutCallbacks: BtreeCallback {
     /// Details from client needed for inserting a key and a value to the BTree.
     ///
     fn put_details<'f>(
+        &self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
     ) -> RpcFuture<'f, ClientPutDetails>;
@@ -96,32 +117,14 @@ pub trait PutCallbacks: BtreeCallback {
     ///
     /// Returns signed by client new merkle root as bytes.
     ///
-    fn verify_changes<'f>(server_merkle_root: Bytes, was_splitting: bool) -> RpcFuture<'f, Bytes>;
+    fn verify_changes<'f>(
+        &self,
+        server_merkle_root: Bytes,
+        was_splitting: bool,
+    ) -> RpcFuture<'f, Bytes>;
 
     /// Server confirms that all changes was persisted.
-    fn changes_stored<'f>() -> RpcFuture<'f, ()>;
-}
-
-/// A structure for holding all client details needed for inserting a key and a
-/// value to the OpeBTree.
-pub struct ClientPutDetails {
-    /// The key that will be placed to the BTree
-    key: Bytes,
-    /// Hash of value that will be placed to the BTree
-    val_hash: Bytes,
-    /// A result of searching client's key among keys of the leaf in which the
-    /// new key and value will be inserted. Contains an index for inserting.
-    search_result: SearchResult,
+    fn changes_stored<'f>(&self) -> RpcFuture<'f, ()>;
 }
 
 // todo add callback for remove operation
-
-pub mod errors {
-    error_chain! {
-        errors {
-            RpcError(msg:  String) {
-                display("Rpc Error: {:?}", msg)
-            }
-        }
-    }
-}
