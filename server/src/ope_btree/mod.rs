@@ -11,7 +11,6 @@ use self::node_store::BinaryNodeStore;
 use self::node_store::NodeStore;
 use crate::ope_btree::commands::BTreeCmd;
 use crate::ope_btree::commands::SearchCmd;
-use async_kvstore::boxed::KVStore;
 use bytes::Bytes;
 use common::Key;
 use futures::future::BoxFuture;
@@ -165,11 +164,11 @@ impl From<ValueRef> for Bytes {
 mod tests {
     use super::*;
     use crate::common::Hash;
-    use async_kvstore::boxed::HashMapKVStorage;
+    use kvstore_inmemory::hashmap_store::HashMapKVStore;
 
     fn create_node_store(mut idx: usize) -> impl NodeStore<usize, Node> {
         BinaryNodeStore::new(
-            HashMapKVStorage::new(),
+            HashMapKVStore::new(),
             Box::new(move || {
                 idx += 1;
                 idx

@@ -12,8 +12,10 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Add;
 
-use async_kvstore::boxed::{HashMapKVStorage, KVStore};
 use futures::future::BoxFuture;
+use kvstore_api::kvstore::*;
+use kvstore_api::*;
+use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -36,7 +38,7 @@ pub enum NodeStoreError {
     #[error("KVStore Error")]
     KVStoreErr {
         #[from]
-        source: async_kvstore::boxed::KVStorageError,
+        source: kvstore_api::kvstore::KVStoreError,
     },
 }
 
@@ -55,7 +57,7 @@ where
     fn next_id(&mut self) -> Id; // todo maybe wrap to Future or/and Result?
 
     /// Gets stored node for specified id.
-    fn get<'a: 's, 's>(&'s self, node_id: &Id) -> Task<'a, Option<Node>>;
+    fn get<'a: 's, 's>(&'s self, node_id: &Id) -> Task<'s, Option<Node>>;
 
     /// Stores the specified node with the specified id.
     /// Rewrite existing value if it's present.
@@ -102,16 +104,16 @@ where
         (self.id_generator)()
     }
 
-    fn get<'a: 's, 's>(&'s self, node_id: &Id) -> Task<'a, Option<Node>> {
+    // todo problem with lifetimes right here, need to switch to async\await
+
+    fn get<'a: 's, 's>(&'s self, node_id: &Id) -> Task<'s, Option<Node>> {
         let node_id = to_byte(&node_id).unwrap();
-        let node = self
-            .store
-            .get(node_id)
-            .map_err(Into::into)
-            .and_then(|node_bytes| {
-                let res = node_bytes.map(|raw| from_byte::<Node>(&raw)).transpose();
-                async { res }
-            });
+        let bytes: StoreTask<Option<Vec<u8>>> = self.store.get(node_id);
+
+        let node = bytes.map_err(Into::into).and_then(|node_bytes| {
+            let res = node_bytes.map(|raw| from_byte::<Node>(&raw)).transpose();
+            async { res }
+        });
 
         Box::pin(node)
     }
@@ -143,23 +145,14 @@ fn from_byte<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 
 #[cfg(test)]
 mod tests {
-    use rmps::{Deserializer, Serializer};
-    use serde::{Deserialize, Serialize};
-
-    use super::BinaryNodeStore;
-    use super::NodeStore;
-    use crate::ope_btree::node::Node;
-    use crate::ope_btree::node::TreeNode;
-    use rmp_serde::decode::ReadReader;
-
+    use super::*;
     use crate::ope_btree::node::tests as node_test;
-    use async_kvstore::boxed::{HashMapKVStorage, KVStore};
-    use bytes::Bytes;
+    use crate::ope_btree::node::Node;
     use std::sync::Arc;
 
     #[test]
     fn sync_dyn_test() {
-        let _store: Arc<Send + Sync> = Arc::new(create(0));
+        let _store: Arc<dyn Send + Sync> = Arc::new(create(0));
     }
 
     #[tokio::test]
@@ -211,7 +204,7 @@ mod tests {
     // todo add negative cases
 
     fn create(mut idx: u64) -> impl NodeStore<u64, Node> {
-        let store = HashMapKVStorage::new();
+        let store = HashMapKVStore::new();
         BinaryNodeStore::new(
             store,
             Box::new(move || {

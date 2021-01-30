@@ -5,10 +5,11 @@ use crate::ope_btree::node::Node;
 use crate::ope_btree::node_store::BinaryNodeStore;
 use crate::ope_btree::node_store::NodeStore;
 use crate::ope_btree::{BTreeErr, OpeBTree};
-use async_kvstore::boxed::KVStore;
 use bytes::Bytes;
 use common::misc::ToBytes;
 use futures::{Future, TryStreamExt};
+use kvstore_api::kvstore::KVStore;
+use kvstore_api::kvstore::*;
 use protocol::SearchCallback;
 use std::sync::Arc;
 use thiserror::Error;
@@ -93,19 +94,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::OpeDatabase;
-    use crate::ope_btree::node::Node;
-    use crate::ope_btree::node_store::BinaryNodeStore;
-    use crate::ope_btree::node_store::NodeStore;
-    use crate::ope_btree::OpeBTree;
+    use super::*;
     use crate::ope_btree::OpeBTreeConf;
-    use async_kvstore::boxed::HashMapKVStorage;
-    use bytes::Bytes;
+    use kvstore_inmemory::hashmap_store::HashMapKVStore;
 
     #[test]
     fn new_test() {
         let index = create_tree(create_node_store(0));
-        let _db = OpeDatabase::new(index, HashMapKVStorage::new());
+        let _db = OpeDatabase::new(index, HashMapKVStore::new());
     }
 
     #[test]
@@ -118,7 +114,7 @@ mod tests {
 
     fn create_node_store(mut idx: usize) -> impl NodeStore<usize, Node> {
         BinaryNodeStore::new(
-            HashMapKVStorage::new(),
+            HashMapKVStore::new(),
             Box::new(move || {
                 idx += 1;
                 idx
@@ -136,8 +132,8 @@ mod tests {
         )
     }
 
-    fn create_db() -> OpeDatabase<impl NodeStore<usize, Node>, HashMapKVStorage<Bytes, Bytes>> {
+    fn create_db() -> OpeDatabase<impl NodeStore<usize, Node>, HashMapKVStore<Bytes, Bytes>> {
         let index = create_tree(create_node_store(0));
-        OpeDatabase::new(index, HashMapKVStorage::new())
+        OpeDatabase::new(index, HashMapKVStore::new())
     }
 }

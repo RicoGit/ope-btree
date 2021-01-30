@@ -2,7 +2,6 @@
 
 #![allow(dead_code)] // todo remove later
 
-use std::future::Future;
 use std::result;
 
 use bytes::Bytes;

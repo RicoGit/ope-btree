@@ -5,7 +5,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use async_kvstore;
 use common;
 use protocol;
 
