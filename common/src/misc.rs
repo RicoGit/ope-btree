@@ -1,7 +1,7 @@
 use super::{Bytes, Hash, Key};
 use bytes::BytesMut;
 
-impl From<Key> for Bytes {
+impl From<Key> for BytesMut {
     fn from(key: Key) -> Self {
         key.0
     }
@@ -30,12 +30,18 @@ impl From<Hash> for BytesMut {
 /// assert_eq!(bytes1, bytes2);
 /// ```
 pub trait ToBytes: Sized {
-    /// Returns inner Bytes, does the same thing ```key.0```
-    fn bytes(self) -> BytesMut;
+    /// Returns inner Bytes
+    fn bytes(self) -> Bytes;
+
+    /// Returns inner BytesMut
+    fn bytes_mut(self) -> BytesMut;
 }
 
 impl<T: Into<BytesMut>> ToBytes for T {
-    fn bytes(self) -> BytesMut {
+    fn bytes(self) -> Bytes {
+        self.into().freeze()
+    }
+    fn bytes_mut(self) -> BytesMut {
         self.into()
     }
 }

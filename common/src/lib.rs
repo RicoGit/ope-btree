@@ -14,7 +14,7 @@ use sha3::digest::generic_array::GenericArray;
 
 /// A ciphered key for retrieve a value.
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
-pub struct Key(pub Bytes);
+pub struct Key(pub BytesMut);
 
 /// A hash of anything.
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]

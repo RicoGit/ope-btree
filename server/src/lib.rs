@@ -1,4 +1,4 @@
-//! todo
+//! todo docs
 
 // todo remove 'allow'
 #![allow(unused_imports)]
@@ -11,10 +11,6 @@ use protocol;
 
 use serde;
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate serde_derive;
 extern crate rmp_serde as rmps;
 
 // Order-preserving encryption Btree implementation

@@ -9,3 +9,6 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 
 - BTree operarates only bytes, there is no needed to different K and V
 - Only tree client now what is actually type of K and V
+
+
+todo consider use channels instead of callbacks

@@ -6,6 +6,7 @@ use std::future::Future;
 use std::result;
 
 use bytes::Bytes;
+use futures::future::BoxFuture;
 use thiserror::Error;
 
 /// Protocol errors
@@ -13,12 +14,13 @@ use thiserror::Error;
 pub enum ProtocolError {
     #[error("Rpc Error: {msg:?}")]
     RpcError { msg: String },
+    // todo io error ?
 }
 
 type Result<V> = result::Result<V, ProtocolError>;
 
 /// Future that carries result of Rpc call.
-pub type RpcFuture<'f, V> = Box<dyn Future<Output = Result<V>> + Send + 'f>;
+pub type RpcFuture<'f, V> = BoxFuture<'f, Result<V>>;
 
 /// A result of searching some key in an array of keys.
 ///

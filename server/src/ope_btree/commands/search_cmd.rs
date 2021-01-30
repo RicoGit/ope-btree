@@ -1,12 +1,13 @@
-use super::errors::*;
-use crate::ope_btree::commands::BTreeCmd;
 use crate::ope_btree::commands::CmdFuture;
 use crate::ope_btree::commands::SearchCmd;
+use crate::ope_btree::commands::{BTreeCmd, CmdError};
 use crate::ope_btree::node::BranchNode;
 use crate::ope_btree::node::CloneAsBytes;
 use crate::ope_btree::node::LeafNode;
+
 use bytes::Bytes;
-use futures::Future;
+use futures::future::TryFuture;
+use futures::TryFutureExt;
 use protocol::BtreeCallback;
 use protocol::SearchCallback;
 use protocol::SearchResult;
@@ -17,7 +18,7 @@ where
     Cb: BtreeCallback,
 {
     fn next_child_idx<'f>(&self, branch: &'f BranchNode) -> CmdFuture<'f, usize> {
-        Box::new(
+        Box::pin(
             self.next_child_idx(
                 branch.keys.clone_as_bytes(),
                 branch.children_hashes.clone_as_bytes(),
@@ -28,7 +29,7 @@ where
 }
 
 /// Implements `SearchCmd` for each type with `SearchCallback` functionality.
-impl<Cb> SearchCmd for Cb
+impl<Cb: BTreeCmd> SearchCmd for Cb
 where
     Cb: SearchCallback,
 {
@@ -44,6 +45,6 @@ where
             self.leaf_not_found()
         };
 
-        Box::new(future.from_err::<Error>())
+        Box::pin(future.map_err(Into::into))
     }
 }

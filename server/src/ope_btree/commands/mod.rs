@@ -5,12 +5,23 @@ pub mod search_cmd;
 use super::node::BranchNode;
 use crate::ope_btree::node::LeafNode;
 use common::merkle::MerklePath;
-use errors::*;
-use futures::Future;
 use protocol::{ClientPutDetails, SearchResult};
+use thiserror::Error;
+
+use futures::future::BoxFuture;
+use std::future::Future;
+
+#[derive(Error, Debug)]
+#[error("Command Error")]
+pub struct CmdError {
+    #[from]
+    source: protocol::ProtocolError,
+}
+
+pub type Result<V> = std::result::Result<V, CmdError>;
 
 /// Future that carries the Command result.
-pub type CmdFuture<'f, V> = Box<dyn Future<Item = V, Error = errors::Error> + Send + 'f>;
+pub type CmdFuture<'f, V> = BoxFuture<'f, Result<V>>;
 
 /// Root functionality for all OpeBTree commands.
 pub trait BTreeCmd {
@@ -47,7 +58,7 @@ pub trait PutCmd: BTreeCmd {
     ///
     /// * `leaf` - Values for calculating current node hash on the client side
     ///             and find an index to insert.
-    fn put_details<'f>(leaf: Option<LeafNode>) -> CmdFuture<'f, ClientPutDetails>;
+    fn put_details<'f>(&self, leaf: Option<LeafNode>) -> CmdFuture<'f, ClientPutDetails>;
 
     /// Server sends a merkle path to the client after inserting a key-value
     /// pair into the tree.
@@ -57,14 +68,6 @@ pub trait PutCmd: BTreeCmd {
     /// * `merkle_path` - A tree path traveled in the OpeBTree from the root to a leaf
     /// * `was_splitting` - An indicator of the fact that during inserting there
     ///                     was a tree rebalancing
-    fn verify_changes<'f>(merkle_path: MerklePath, was_splitting: bool) -> CmdFuture<'f, ()>;
-}
-
-mod errors {
-    error_chain! {
-         links {
-            // Wraps protocol error
-            CmdError(protocol::errors::Error, protocol::errors::ErrorKind);
-        }
-    }
+    fn verify_changes<'f>(&self, merkle_path: MerklePath, was_splitting: bool)
+        -> CmdFuture<'f, ()>;
 }

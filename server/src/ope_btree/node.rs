@@ -3,6 +3,7 @@
 use crate::ope_btree::ValueRef;
 use bytes::Bytes;
 use common::{Hash, Key};
+use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
 type NodeRef = usize;
@@ -96,7 +97,8 @@ pub trait TreeNode {
     fn hash() -> Hash;
 }
 
-impl LeafNode { // todo derive Default?
+impl LeafNode {
+    // todo derive Default?
     /// Creates and returns a new empty LeafNode.
     pub fn new() -> Self {
         LeafNode {
@@ -128,7 +130,7 @@ pub trait CloneAsBytes {
     fn clone_as_bytes(&self) -> Vec<Bytes>;
 }
 
-use crate::common::misc::ToBytes;
+use common::misc::ToBytes;
 
 impl<T: ToBytes + Clone> CloneAsBytes for Vec<T> {
     fn clone_as_bytes(&self) -> Vec<Bytes> {
@@ -143,7 +145,7 @@ pub mod tests {
     use crate::ope_btree::node::BranchNode;
     use crate::ope_btree::node::LeafNode;
     use crate::ope_btree::node::Node;
-    use bytes::Bytes;
+    use bytes::{Bytes, BytesMut};
     use common::Hash;
     use rmps::{Deserializer, Serializer};
     use serde::{Deserialize, Serialize};
@@ -170,25 +172,28 @@ pub mod tests {
 
     pub fn create_leaf() -> LeafNode {
         LeafNode {
-            keys: vec![Key(Bytes::from("key1")), Key(Bytes::from("key2"))],
+            keys: vec![Key(BytesMut::from("key1")), Key(BytesMut::from("key2"))],
             values_refs: vec![ValueRef(Bytes::from("ref1")), ValueRef(Bytes::from("ref2"))],
-            values_hashes: vec![Hash(Bytes::from("hash1")), Hash(Bytes::from("hash2"))],
-            kv_hashes: vec![Hash(Bytes::from("kv_hash1")), Hash(Bytes::from("kv_hash2"))],
+            values_hashes: vec![Hash(BytesMut::from("hash1")), Hash(BytesMut::from("hash2"))],
+            kv_hashes: vec![
+                Hash(BytesMut::from("kv_hash1")),
+                Hash(BytesMut::from("kv_hash2")),
+            ],
             size: 2,
-            hash: Hash(Bytes::from("leaf_hash")),
+            hash: Hash(BytesMut::from("leaf_hash")),
             right_sibling: None,
         }
     }
 
     pub fn create_branch() -> BranchNode {
         BranchNode {
-            keys: vec![Key(Bytes::from("key1")), Key(Bytes::from("key2"))],
+            keys: vec![Key(BytesMut::from("key1")), Key(BytesMut::from("key2"))],
             children_refs: vec![1, 2],
             size: 2,
-            hash: Hash(Bytes::from("leaf_hash")),
+            hash: Hash(BytesMut::from("leaf_hash")),
             children_hashes: vec![
-                Hash(Bytes::from("child_hash1")),
-                Hash(Bytes::from("child_hash2")),
+                Hash(BytesMut::from("child_hash1")),
+                Hash(BytesMut::from("child_hash2")),
             ],
         }
     }
