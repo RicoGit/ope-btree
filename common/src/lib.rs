@@ -1,5 +1,6 @@
 //! Common structures and traits for all submodules. Maybe it's a temp solution.
 
+pub mod gen;
 pub mod merkle;
 pub mod misc;
 
@@ -13,11 +14,11 @@ use sha3::digest::generic_array::ArrayLength;
 use sha3::digest::generic_array::GenericArray;
 
 /// A ciphered key for retrieve a value.
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
 pub struct Key(pub BytesMut);
 
 /// A hash of anything.
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
 pub struct Hash(pub BytesMut);
 
 impl Hash {

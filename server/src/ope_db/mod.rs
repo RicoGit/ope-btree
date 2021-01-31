@@ -79,6 +79,7 @@ where
 mod tests {
     use super::*;
     use crate::ope_btree::OpeBTreeConf;
+    use common::gen::NumGen;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
 
     #[test]
@@ -96,19 +97,13 @@ mod tests {
     // todo write more test cases
 
     fn create_node_store(
-        mut idx: usize,
-    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>> {
-        BinaryNodeStore::new(
-            HashMapKVStore::new(),
-            Box::new(move || {
-                idx += 1;
-                idx
-            }),
-        )
+        idx: usize,
+    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>, NumGen> {
+        BinaryNodeStore::new(HashMapKVStore::new(), NumGen(idx))
     }
 
     fn create_tree<Store: KVStore<Vec<u8>, Vec<u8>>>(
-        node_store: BinaryNodeStore<usize, Node, Store>,
+        node_store: BinaryNodeStore<usize, Node, Store, NumGen>,
     ) -> OpeBTree<Store> {
         OpeBTree::new(
             OpeBTreeConf {

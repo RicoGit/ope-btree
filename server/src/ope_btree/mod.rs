@@ -11,11 +11,13 @@ use self::node_store::BinaryNodeStore;
 use crate::ope_btree::commands::BTreeCmd;
 use crate::ope_btree::commands::SearchCmd;
 use bytes::Bytes;
+use common::gen::NumGen;
 use common::Key;
 use futures::future::BoxFuture;
 use futures::{FutureExt, TryFutureExt};
 use kvstore_api::kvstore::KVStore;
 use kvstore_binary::BinKVStore;
+use log::debug;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -25,8 +27,6 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 type Result<V> = std::result::Result<V, BTreeErr>;
-
-type Task<'a, V> = BoxFuture<'a, Result<V>>;
 
 /// BTree errors
 #[derive(Error, Debug)]
@@ -82,7 +82,7 @@ pub struct OpeBTree<Store>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
-    node_store: RwLock<BinaryNodeStore<usize, Node, Store>>,
+    node_store: RwLock<BinaryNodeStore<usize, Node, Store, NumGen>>,
     config: OpeBTreeConf,
     // todo should contain valRefProvider: () ⇒ ValueRef
 }
@@ -91,16 +91,21 @@ impl<Store> OpeBTree<Store>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
-    pub fn new(config: OpeBTreeConf, node_store: BinaryNodeStore<usize, Node, Store>) -> Self {
+    pub fn new(
+        config: OpeBTreeConf,
+        node_store: BinaryNodeStore<usize, Node, Store, NumGen>,
+    ) -> Self {
         let node_store = RwLock::new(node_store);
 
         OpeBTree { config, node_store }
     }
 
-    pub fn get<'a, SCmd>(&self, cmd: SCmd) -> Task<'a, ValueRef>
+    pub async fn get<GetCmd>(&self, cmd: GetCmd) -> Result<ValueRef>
     where
-        SCmd: SearchCmd + BTreeCmd,
+        GetCmd: SearchCmd + BTreeCmd,
     {
+        let root = self.get_root().await?;
+
         // get root
         // cmd.sent_leaf
         //
@@ -108,26 +113,19 @@ where
         unimplemented!()
     }
 
-    fn get_root(&self) -> Task<Node> {
-        //        let root = self.node_store.read()
-        //            .map_err(|_| "Can't get read access to node_store".into())
-        //            .and_then(|store| {
-        //                store.get(&ROOT_ID)
-        //                    .from_err::<errors::Error>()
-        //            }).wait();
-        //
-        //        match root {
-        //            Ok(Some(node)) => node,
-        //            Ok(None) => {
-        //
-        //                // create root and safe it to node_store
-        //            }
-        //
-        //        }
-        //        // todo root should be somewhere created either when Tree created or here
-        //        Box::new(root)
+    /// Gets or creates root node
+    async fn get_root(&self) -> Result<Node> {
+        let node_store = self.node_store.read().await;
 
-        unimplemented!()
+        let root = if let Some(root) = node_store.get(ROOT_ID).await? {
+            root
+        } else {
+            let mut node_store = self.node_store.write().await;
+            let new_root = Node::empty_branch();
+            node_store.set(ROOT_ID, new_root.clone()).await?;
+            new_root
+        };
+        Ok(root)
     }
 
     pub(self) async fn read_node(&self, node_id: usize) -> Result<Option<Node>> {
@@ -161,20 +159,14 @@ mod tests {
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
 
     fn create_node_store(
-        mut idx: usize,
-    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>> {
+        idx: usize,
+    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>, NumGen> {
         let store = HashMapKVStore::new();
-        BinaryNodeStore::new(
-            store,
-            Box::new(move || {
-                idx += 1;
-                idx
-            }),
-        )
+        BinaryNodeStore::new(store, NumGen(idx))
     }
 
     fn create_tree<Store: KVStore<Vec<u8>, Vec<u8>> + Send>(
-        store: BinaryNodeStore<usize, Node, Store>,
+        store: BinaryNodeStore<usize, Node, Store, NumGen>,
     ) -> OpeBTree<Store> {
         OpeBTree::new(
             OpeBTreeConf {

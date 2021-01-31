@@ -12,6 +12,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Add;
 
+use common::gen::Generator;
 use futures::future::BoxFuture;
 use kvstore_api::kvstore::*;
 use kvstore_api::*;
@@ -30,39 +31,33 @@ pub enum NodeStoreError {
 
 type Result<V> = std::result::Result<V, NodeStoreError>;
 
-pub struct BinaryNodeStore<Id, Node, Store>
+pub struct BinaryNodeStore<Id, Node, Store, IdGen>
 where
     Id: Send,
     Node: Send,
     Store: KVStore<Vec<u8>, Vec<u8>>,
+    IdGen: Generator<Item = Id>,
 {
     store: BinKVStore<Id, Node, Store>,
-    // todo Result? Is Error is possible here ? todo static dispatch?
-    id_generator: Box<dyn FnMut() -> Id + Send + Sync>, // todo trait?
+    id_generator: IdGen,
 }
 
-impl<Id, Node, Store> BinaryNodeStore<Id, Node, Store>
+impl<Id, Node, Store, IdGen> BinaryNodeStore<Id, Node, Store, IdGen>
 where
     Id: Serialize + DeserializeOwned + Send,
     Node: Serialize + DeserializeOwned + Send,
     Store: KVStore<Vec<u8>, Vec<u8>>,
+    IdGen: Generator<Item = Id>,
 {
-    pub fn new(store: Store, id_generator: Box<dyn FnMut() -> Id + Send + Sync>) -> Self {
+    pub fn new(store: Store, id_generator: IdGen) -> Self {
         BinaryNodeStore {
             store: BinKVStore::new(store),
             id_generator,
         }
     }
-}
 
-impl<Id, Node, Store> BinaryNodeStore<Id, Node, Store>
-where
-    Id: Serialize + DeserializeOwned + Send,
-    Node: Serialize + DeserializeOwned + Send,
-    Store: KVStore<Vec<u8>, Vec<u8>>,
-{
     fn next_id(&mut self) -> Id {
-        (self.id_generator)()
+        self.id_generator.gen()
     }
 
     pub async fn get(&self, node_id: Id) -> Result<Option<Node>> {
@@ -81,6 +76,7 @@ mod tests {
     use super::*;
     use crate::ope_btree::node::tests as node_test;
     use crate::ope_btree::node::Node;
+    use common::gen::NumGen;
     use std::sync::Arc;
 
     #[test]
@@ -143,14 +139,10 @@ mod tests {
 
     // todo add negative cases
 
-    fn create(mut idx: usize) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>> {
+    fn create(
+        idx: usize,
+    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>, NumGen> {
         let store = HashMapKVStore::new();
-        BinaryNodeStore::new(
-            store,
-            Box::new(move || {
-                idx += 1;
-                idx
-            }),
-        )
+        BinaryNodeStore::new(store, NumGen(idx))
     }
 }

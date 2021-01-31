@@ -2,6 +2,7 @@
 
 use crate::ope_btree::ValueRef;
 use bytes::Bytes;
+use common::misc::ToBytes;
 use common::{Hash, Key};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -33,7 +34,7 @@ impl Node {
 /// relationship. It means that:
 /// `keys.size == values_refs.size == values_hashes.size == kv_hashes.size == size`
 ///
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
 pub struct LeafNode {
     /// Search keys
     pub keys: Vec<Key>,
@@ -59,11 +60,18 @@ pub struct LeafNode {
     pub right_sibling: Option<NodeRef>,
 }
 
+impl LeafNode {
+    /// Creates and returns a new empty LeafNode.
+    pub fn new() -> Self {
+        LeafNode::default()
+    }
+}
+
 /// Branch node of the tree, do not contains any business values, contains
 /// references to children nodes. Number of children == number of keys in all
 /// branches except last(rightmost) for any tree level. The rightmost branch
 /// contain (size + 1) children
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
 pub struct BranchNode {
     /// Search keys
     pub keys: Vec<Key>,
@@ -79,6 +87,13 @@ pub struct BranchNode {
 
     /// Hash of branch state
     pub hash: Hash,
+}
+
+impl BranchNode {
+    /// Creates and returns a new empty BranchNode.
+    pub fn new() -> Self {
+        BranchNode::default()
+    }
 }
 
 //
@@ -97,44 +112,25 @@ pub trait TreeNode {
     fn hash() -> Hash;
 }
 
-impl LeafNode {
-    // todo derive Default?
-    /// Creates and returns a new empty LeafNode.
-    pub fn new() -> Self {
-        LeafNode {
-            keys: vec![],
-            values_refs: vec![],
-            values_hashes: vec![],
-            kv_hashes: vec![],
-            size: 0,
-            hash: Hash::empty(),
-            right_sibling: None,
-        }
-    }
+/// Wrapper for the node with its corresponding id
+pub struct NodeWithId<Id, Node: TreeNode> {
+    id: Id,
+    node: Node,
 }
 
-impl BranchNode {
-    /// Creates and returns a new empty BranchNode.
-    pub fn new() -> Self {
-        BranchNode {
-            keys: vec![],
-            children_refs: vec![],
-            children_hashes: vec![],
-            size: 0,
-            hash: Hash::empty(),
-        }
-    }
+/// Wrapper of the child id and the checksum
+pub struct ChildRef<Id> {
+    id: Id,
+    checksum: Hash,
 }
 
 pub trait CloneAsBytes {
     fn clone_as_bytes(&self) -> Vec<Bytes>;
 }
 
-use common::misc::ToBytes;
-
 impl<T: ToBytes + Clone> CloneAsBytes for Vec<T> {
     fn clone_as_bytes(&self) -> Vec<Bytes> {
-        self.iter().map(|key| key.clone().bytes()).collect()
+        self.iter().map(|t| t.clone().bytes()).collect()
     }
 }
 
