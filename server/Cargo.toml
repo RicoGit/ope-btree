@@ -11,6 +11,7 @@ protocol = { path = "../protocol" }
 
 kvstore-api = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
 kvstore-inmemory = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
+kvstore-binary = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
 #kvstore-api = { path="../../../async-kvstore/api" }
 #kvstore-inmemory = { path="../../../async-kvstore/inmemory" }
 
