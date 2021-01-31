@@ -5,6 +5,7 @@ pub trait Generator {
     fn gen(&mut self) -> Self::Item;
 }
 
+#[derive(Debug, Clone)]
 pub struct NumGen(pub usize);
 
 impl Generator for NumGen {

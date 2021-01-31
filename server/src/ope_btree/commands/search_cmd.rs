@@ -1,9 +1,9 @@
 use crate::ope_btree::commands::CmdFuture;
 use crate::ope_btree::commands::SearchCmd;
 use crate::ope_btree::commands::{BTreeCmd, CmdError};
-use crate::ope_btree::core::node::BranchNode;
-use crate::ope_btree::core::node::CloneAsBytes;
-use crate::ope_btree::core::node::LeafNode;
+use crate::ope_btree::internal::node::BranchNode;
+use crate::ope_btree::internal::node::CloneAsBytes;
+use crate::ope_btree::internal::node::LeafNode;
 
 use bytes::Bytes;
 use futures::future::TryFuture;

@@ -26,6 +26,10 @@ impl Node {
     pub fn empty_branch() -> Node {
         Node::Branch(BranchNode::new())
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.size() == 0
+    }
 }
 
 /// A leaf element of the tree, contains references of stored values with
@@ -163,9 +167,9 @@ impl<T: ToBytes + Clone> CloneAsBytes for Vec<T> {
 pub mod tests {
     use super::Key;
     use super::ValueRef;
-    use crate::ope_btree::core::node::BranchNode;
-    use crate::ope_btree::core::node::LeafNode;
-    use crate::ope_btree::core::node::Node;
+    use crate::ope_btree::internal::node::BranchNode;
+    use crate::ope_btree::internal::node::LeafNode;
+    use crate::ope_btree::internal::node::Node;
     use bytes::{Bytes, BytesMut};
     use common::Hash;
     use rmps::{Deserializer, Serializer};

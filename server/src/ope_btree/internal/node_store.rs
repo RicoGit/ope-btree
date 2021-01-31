@@ -31,6 +31,7 @@ pub enum NodeStoreError {
 
 type Result<V> = std::result::Result<V, NodeStoreError>;
 
+#[derive(Debug)]
 pub struct BinaryNodeStore<Id, Node, Store, IdGen>
 where
     Id: Send,
@@ -74,8 +75,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ope_btree::core::node::tests as node_test;
-    use crate::ope_btree::core::node::Node;
+    use crate::ope_btree::internal::node::tests as node_test;
+    use crate::ope_btree::internal::node::Node;
     use common::gen::NumGen;
     use std::sync::Arc;
 

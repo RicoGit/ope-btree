@@ -2,8 +2,8 @@
 
 pub mod search_cmd;
 
-use super::core::node::BranchNode;
-use crate::ope_btree::core::node::LeafNode;
+use super::internal::node::BranchNode;
+use crate::ope_btree::internal::node::LeafNode;
 use common::merkle::MerklePath;
 use protocol::{ClientPutDetails, SearchResult};
 use thiserror::Error;
@@ -18,6 +18,7 @@ pub struct CmdError {
     source: protocol::ProtocolError,
 }
 
+// todo remove Future from commands, Boxed futures should be only in protocol
 pub type Result<V> = std::result::Result<V, CmdError>;
 
 /// Future that carries the Command result.
