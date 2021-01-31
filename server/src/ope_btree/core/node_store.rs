@@ -74,8 +74,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ope_btree::node::tests as node_test;
-    use crate::ope_btree::node::Node;
+    use crate::ope_btree::core::node::tests as node_test;
+    use crate::ope_btree::core::node::Node;
     use common::gen::NumGen;
     use std::sync::Arc;
 

@@ -1,18 +1,11 @@
 //! BTree implementation.
 //! todo more documentation when btree will be ready
 
-pub mod commands;
-pub mod node;
-pub mod node_store;
+use std::future::Future;
+use std::marker::PhantomData;
+use std::sync::Mutex;
 
-use self::node::Node;
-use self::node::TreeNode;
-use self::node_store::BinaryNodeStore;
-use crate::ope_btree::commands::BTreeCmd;
-use crate::ope_btree::commands::SearchCmd;
 use bytes::Bytes;
-use common::gen::NumGen;
-use common::Key;
 use futures::future::BoxFuture;
 use futures::{FutureExt, TryFutureExt};
 use kvstore_api::kvstore::KVStore;
@@ -20,11 +13,19 @@ use kvstore_binary::BinKVStore;
 use log::debug;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
-use std::future::Future;
-use std::marker::PhantomData;
-use std::sync::Mutex;
 use thiserror::Error;
 use tokio::sync::RwLock;
+
+use common::gen::NumGen;
+use common::Key;
+
+use crate::ope_btree::commands::BTreeCmd;
+use crate::ope_btree::commands::SearchCmd;
+use crate::ope_btree::core::node::Node;
+use crate::ope_btree::core::node_store::{BinaryNodeStore, NodeStoreError};
+
+pub mod commands;
+pub mod core;
 
 type Result<V> = std::result::Result<V, BTreeErr>;
 
@@ -34,7 +35,7 @@ pub enum BTreeErr {
     #[error("Node Store Error")]
     NodeStoreError {
         #[from]
-        source: node_store::NodeStoreError,
+        source: NodeStoreError,
     },
 
     #[error("Unexpected Error: {msg:?}")]
@@ -139,6 +140,21 @@ where
         lock.set(node_id, node).await?;
         Ok(())
     }
+
+    // /// Saves all changed nodes to tree store. Apply put_task to old tree state for getting new tree state.
+    // ///
+    // /// @param putTask Pool of changed nodes
+    // fn commit_new_state(put_task: PutTask) -> Result<()> {
+    //     debug!("commit_new_state for nodes={:?}", put_task);
+    //     // todo start transaction
+    //
+    //     // Task
+    //     // .gatherUnordered(putTask.nodesToSave.map { case NodeWithId(id, node) ⇒ saveNode(id, node) })
+    //     // .foreachL(_ ⇒ if (putTask.increaseDepth) this.depth.increment())
+    //
+    //     // todo end transaction
+    //     todo!()
+    // }
 
     // todo put, remove, traverse
 }
