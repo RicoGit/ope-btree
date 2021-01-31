@@ -5,11 +5,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use common;
-use protocol;
-
-use serde;
-
 extern crate rmp_serde as rmps;
 
 // Order-preserving encryption Btree implementation

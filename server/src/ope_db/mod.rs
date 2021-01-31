@@ -53,6 +53,13 @@ where
         }
     }
 
+    /// Database initialization
+    async fn init(&mut self) -> Result<()> {
+        let mut idx = self.index.write().await;
+        idx.init().await?;
+        Ok(())
+    }
+
     /// Initiates ''Get'' operation in remote MerkleBTree. Returns found value,
     /// None if nothing was found.
     ///
@@ -82,15 +89,16 @@ mod tests {
     use common::gen::NumGen;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
 
-    #[test]
-    fn new_test() {
+    #[tokio::test]
+    async fn new_test() {
         let index = create_tree(create_node_store(0));
-        let _db = OpeDatabase::new(index, HashMapKVStore::new());
+        let mut db = OpeDatabase::new(index, HashMapKVStore::new());
+        assert!(db.init().await.is_ok())
     }
 
-    #[test]
-    fn get_test() {
-        let db = create_db();
+    #[tokio::test]
+    async fn get_test() {
+        let db = create_db().await;
         // todo test later
     }
 
@@ -114,8 +122,11 @@ mod tests {
         )
     }
 
-    fn create_db() -> OpeDatabase<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>> {
+    async fn create_db(
+    ) -> OpeDatabase<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>> {
         let index = create_tree(create_node_store(0));
-        OpeDatabase::new(index, HashMapKVStore::new())
+        let mut db = OpeDatabase::new(index, HashMapKVStore::new());
+        assert!(db.init().await.is_ok());
+        db
     }
 }

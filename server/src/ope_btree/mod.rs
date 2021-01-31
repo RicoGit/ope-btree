@@ -10,7 +10,6 @@ use futures::future::BoxFuture;
 use futures::{FutureExt, TryFutureExt};
 use kvstore_api::kvstore::KVStore;
 use kvstore_binary::BinKVStore;
-use log::debug;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -21,8 +20,9 @@ use common::Key;
 
 use crate::ope_btree::commands::BTreeCmd;
 use crate::ope_btree::commands::SearchCmd;
-use crate::ope_btree::core::node::Node;
+use crate::ope_btree::core::node::{Node, NodeWithId};
 use crate::ope_btree::core::node_store::{BinaryNodeStore, NodeStoreError};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod commands;
 pub mod core;
@@ -38,12 +38,25 @@ pub enum BTreeErr {
         source: NodeStoreError,
     },
 
+    #[error("Illegal State Error: {msg:?}")]
+    IllegalStateErr { msg: String },
+
     #[error("Unexpected Error: {msg:?}")]
     Other { msg: String },
 }
 
+impl BTreeErr {
+    fn illegal_state(msg: &str) -> BTreeErr {
+        BTreeErr::IllegalStateErr {
+            msg: msg.to_string(),
+        }
+    }
+}
+
 /// Tree root id is constant, it always points to root node in node_store.
 static ROOT_ID: usize = 0;
+
+pub type NodeId = usize;
 
 /// Configuration for OpeBtree.
 pub struct OpeBTreeConf {
@@ -83,7 +96,8 @@ pub struct OpeBTree<Store>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
-    node_store: RwLock<BinaryNodeStore<usize, Node, Store, NumGen>>,
+    node_store: RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>,
+    depth: AtomicUsize,
     config: OpeBTreeConf,
     // todo should contain valRefProvider: () ⇒ ValueRef
 }
@@ -94,67 +108,91 @@ where
 {
     pub fn new(
         config: OpeBTreeConf,
-        node_store: BinaryNodeStore<usize, Node, Store, NumGen>,
+        node_store: BinaryNodeStore<NodeId, Node, Store, NumGen>,
     ) -> Self {
         let node_store = RwLock::new(node_store);
+        let depth = AtomicUsize::new(0);
+        OpeBTree {
+            config,
+            depth,
+            node_store,
+        }
+    }
 
-        OpeBTree { config, node_store }
+    /// BTree initialization (creates root node if needed)
+    pub async fn init(&mut self) -> Result<()> {
+        let node_store = self.node_store.read().await;
+
+        if node_store.get(ROOT_ID).await?.is_none() {
+            log::debug!("Root node not found - create new one");
+
+            std::mem::drop(node_store);
+            let new_root = Node::empty_branch();
+            let nodes = vec![NodeWithId {
+                id: ROOT_ID,
+                node: new_root,
+            }];
+            let task = PutTask::new(nodes, true, false);
+            self.commit_new_state(task).await?;
+        }
+
+        Ok(())
     }
 
     pub async fn get<GetCmd>(&self, cmd: GetCmd) -> Result<ValueRef>
     where
         GetCmd: SearchCmd + BTreeCmd,
     {
-        let root = self.get_root().await?;
+        if let Node::Leaf(leaf) = self.get_root().await? {
+            // cmd.submit_leaf(leaf);
+        } else {
+            // todo finish
+        };
 
-        // get root
-        // cmd.sent_leaf
-        //
-
-        unimplemented!()
+        todo!()
     }
 
     /// Gets or creates root node
     async fn get_root(&self) -> Result<Node> {
-        let node_store = self.node_store.read().await;
-
-        let root = if let Some(root) = node_store.get(ROOT_ID).await? {
-            root
-        } else {
-            let mut node_store = self.node_store.write().await;
-            let new_root = Node::empty_branch();
-            node_store.set(ROOT_ID, new_root.clone()).await?;
-            new_root
-        };
-        Ok(root)
+        let node = self.read_node(ROOT_ID).await?;
+        node.ok_or_else(|| BTreeErr::illegal_state("Root not isn't exists"))
     }
 
-    pub(self) async fn read_node(&self, node_id: usize) -> Result<Option<Node>> {
+    pub(self) async fn read_node(&self, node_id: NodeId) -> Result<Option<Node>> {
+        log::debug!("Read node: id={:?}", node_id);
+
         let lock = self.node_store.read().await;
         let node = lock.get(node_id).await?;
         Ok(node)
     }
 
-    pub(self) async fn write_node(&mut self, node_id: usize, node: Node) -> Result<()> {
+    /// Saves specified node to tree store
+    pub(self) async fn write_node(&mut self, node_id: NodeId, node: Node) -> Result<()> {
+        log::debug!("Write node: id={:?} node={:?}", node_id, &node);
+
         let mut lock = self.node_store.write().await;
         lock.set(node_id, node).await?;
         Ok(())
     }
 
-    // /// Saves all changed nodes to tree store. Apply put_task to old tree state for getting new tree state.
-    // ///
-    // /// @param putTask Pool of changed nodes
-    // fn commit_new_state(put_task: PutTask) -> Result<()> {
-    //     debug!("commit_new_state for nodes={:?}", put_task);
-    //     // todo start transaction
-    //
-    //     // Task
-    //     // .gatherUnordered(putTask.nodesToSave.map { case NodeWithId(id, node) ⇒ saveNode(id, node) })
-    //     // .foreachL(_ ⇒ if (putTask.increaseDepth) this.depth.increment())
-    //
-    //     // todo end transaction
-    //     todo!()
-    // }
+    /// Saves all changed nodes to tree store. Apply `task` to old tree state for getting new tree state.
+    async fn commit_new_state(&mut self, task: PutTask) -> Result<()> {
+        log::debug!("commit_new_state for nodes={:?}", task);
+
+        // todo start transaction
+
+        if task.increase_depth {
+            self.depth.fetch_add(1, Ordering::Relaxed);
+        }
+        let mut store = self.node_store.write().await;
+
+        for NodeWithId { id, node } in task.nodes_to_save {
+            store.set(id, node).await?;
+        }
+        // todo end transaction
+
+        Ok(())
+    }
 
     // todo put, remove, traverse
 }
@@ -168,21 +206,55 @@ impl From<ValueRef> for Bytes {
     }
 }
 
+/// Task for persisting. Contains updated node after inserting new value and rebalancing the tree.
+#[derive(Debug, Clone, Default)]
+struct PutTask {
+    /// Pool of changed nodes that should be persisted to tree store
+    nodes_to_save: Vec<NodeWithId<NodeId, Node>>,
+    /// If root node was split than tree depth should be increased.
+    /// If true - tree depth will be increased in physical state, if false - depth won't changed.
+    /// Note that each put operation might increase root depth only by one.
+    increase_depth: bool,
+    /// Indicator of the fact that during putting there was a rebalancing
+    was_splitting: bool,
+}
+
+impl PutTask {
+    fn from(nodes_to_save: Vec<NodeWithId<NodeId, Node>>) -> Self {
+        PutTask {
+            nodes_to_save,
+            increase_depth: false,
+            was_splitting: false,
+        }
+    }
+
+    fn new(
+        nodes_to_save: Vec<NodeWithId<NodeId, Node>>,
+        increase_depth: bool,
+        was_splitting: bool,
+    ) -> Self {
+        PutTask {
+            nodes_to_save,
+            increase_depth,
+            was_splitting,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::Hash;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
 
     fn create_node_store(
-        idx: usize,
-    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>, NumGen> {
+        idx: NodeId,
+    ) -> BinaryNodeStore<NodeId, Node, HashMapKVStore<Vec<u8>, Vec<u8>>, NumGen> {
         let store = HashMapKVStore::new();
         BinaryNodeStore::new(store, NumGen(idx))
     }
 
     fn create_tree<Store: KVStore<Vec<u8>, Vec<u8>> + Send>(
-        store: BinaryNodeStore<usize, Node, Store, NumGen>,
+        store: BinaryNodeStore<NodeId, Node, Store, NumGen>,
     ) -> OpeBTree<Store> {
         OpeBTree::new(
             OpeBTreeConf {

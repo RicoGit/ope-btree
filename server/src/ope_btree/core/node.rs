@@ -103,22 +103,47 @@ impl BranchNode {
 /// The root of tree elements hierarchy.
 pub trait TreeNode {
     /// Stored search keys
-    fn keys() -> Vec<Key>;
+    fn keys(&self) -> Vec<Key>;
 
     /// Number of keys inside this tree node (optimization)
-    fn size() -> usize;
+    fn size(&self) -> usize;
 
     /// Digest of this node state
-    fn hash() -> Hash;
+    fn hash(&self) -> Hash;
+}
+
+impl TreeNode for Node {
+    fn keys(&self) -> Vec<Key> {
+        match self {
+            Node::Leaf(leaf) => leaf.keys.clone(),
+            Node::Branch(branch) => branch.keys.clone(),
+        }
+    }
+
+    fn size(&self) -> usize {
+        match self {
+            Node::Leaf(leaf) => leaf.size,
+            Node::Branch(branch) => branch.size,
+        }
+    }
+
+    fn hash(&self) -> Hash {
+        match self {
+            Node::Leaf(leaf) => leaf.hash.clone(),
+            Node::Branch(branch) => branch.hash.clone(),
+        }
+    }
 }
 
 /// Wrapper for the node with its corresponding id
+#[derive(Clone, Debug, Default)]
 pub struct NodeWithId<Id, Node: TreeNode> {
-    id: Id,
-    node: Node,
+    pub id: Id,
+    pub node: Node,
 }
 
 /// Wrapper of the child id and the checksum
+#[derive(Clone, Debug, Default)]
 pub struct ChildRef<Id> {
     id: Id,
     checksum: Hash,
