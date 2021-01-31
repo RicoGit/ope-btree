@@ -59,7 +59,7 @@ impl<Id, Node, Store> BinaryNodeStore<Id, Node, Store>
 where
     Id: Serialize + DeserializeOwned + Send,
     Node: Serialize + DeserializeOwned + Send,
-    Store: KVStore<Vec<u8>, Vec<u8>> + Send,
+    Store: KVStore<Vec<u8>, Vec<u8>>,
 {
     fn next_id(&mut self) -> Id {
         (self.id_generator)()
@@ -70,7 +70,7 @@ where
         Ok(node)
     }
 
-    pub async fn put(&mut self, node_id: Id, node: Node) -> Result<()> {
+    pub async fn set(&mut self, node_id: Id, node: Node) -> Result<()> {
         self.store.set(node_id, node).await?;
         Ok(())
     }
@@ -102,7 +102,7 @@ mod tests {
 
         let id = store.next_id();
         let leaf: Node = Node::Leaf(node_test::create_leaf());
-        assert_eq!((), store.put(id, leaf.clone()).await.unwrap());
+        assert_eq!((), store.set(id, leaf.clone()).await.unwrap());
         assert_eq!(Some(leaf), store.get(id).await.unwrap());
         assert_eq!(store.next_id(), 2);
     }
@@ -114,28 +114,28 @@ mod tests {
         let id1 = store.next_id();
         let node1 = Node::Leaf(node_test::create_leaf());
         assert_eq!(None, store.get(id1).await.unwrap());
-        assert_eq!((), store.put(id1, node1.clone()).await.unwrap());
+        assert_eq!((), store.set(id1, node1.clone()).await.unwrap());
         assert_eq!(Some(node1.clone()), store.get(id1).await.unwrap());
 
-        assert_eq!((), store.put(id1, node1.clone()).await.unwrap());
+        assert_eq!((), store.set(id1, node1.clone()).await.unwrap());
         assert_eq!(Some(node1.clone()), store.get(id1).await.unwrap());
 
         let id2 = store.next_id();
         let node2 = Node::Branch(node_test::create_branch());
-        assert_eq!((), store.put(id1, node2.clone()).await.unwrap());
+        assert_eq!((), store.set(id1, node2.clone()).await.unwrap());
         assert_eq!(Some(node2.clone()), store.get(id1).await.unwrap());
 
         let id3 = store.next_id();
         let node3 = Node::Leaf(node_test::create_leaf());
-        assert_eq!((), store.put(id3, node3.clone()).await.unwrap());
+        assert_eq!((), store.set(id3, node3.clone()).await.unwrap());
 
         let id4 = store.next_id();
         let node4 = Node::Branch(node_test::create_branch());
-        assert_eq!((), store.put(id4, node4.clone()).await.unwrap());
+        assert_eq!((), store.set(id4, node4.clone()).await.unwrap());
 
         let id5 = store.next_id();
         let node5 = Node::Leaf(node_test::create_leaf());
-        assert_eq!((), store.put(id5, node5.clone()).await.unwrap());
+        assert_eq!((), store.set(id5, node5.clone()).await.unwrap());
         assert_eq!(Some(node4.clone()), store.get(id4).await.unwrap());
 
         assert_eq!(vec![id1, id2, id3, id4, id5], vec![101, 102, 103, 104, 105])

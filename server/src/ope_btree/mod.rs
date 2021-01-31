@@ -8,13 +8,14 @@ pub mod node_store;
 use self::node::Node;
 use self::node::TreeNode;
 use self::node_store::BinaryNodeStore;
-use self::node_store::NodeStore;
 use crate::ope_btree::commands::BTreeCmd;
 use crate::ope_btree::commands::SearchCmd;
 use bytes::Bytes;
 use common::Key;
 use futures::future::BoxFuture;
 use futures::{FutureExt, TryFutureExt};
+use kvstore_api::kvstore::KVStore;
+use kvstore_binary::BinKVStore;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -77,24 +78,23 @@ pub struct OpeBTreeConf {
 ///
 /// [`NodeStore`]: ../node_store/trait.NodeStore.html
 /// [`BTreeCommand`]: ../command/trait.BTreeCommand.html
-pub struct OpeBTree<NS>
+pub struct OpeBTree<Store>
 where
-    NS: NodeStore<usize, Node> + 'static,
+    Store: KVStore<Vec<u8>, Vec<u8>>,
 {
-    node_store: RwLock<NS>,
+    node_store: RwLock<BinaryNodeStore<usize, Node, Store>>,
     config: OpeBTreeConf,
     // todo should contain valRefProvider: () ⇒ ValueRef
 }
 
-impl<NS> OpeBTree<NS>
+impl<Store> OpeBTree<Store>
 where
-    NS: NodeStore<usize, Node> + 'static,
+    Store: KVStore<Vec<u8>, Vec<u8>>,
 {
-    pub fn new(config: OpeBTreeConf, node_store: NS) -> Self {
-        OpeBTree {
-            config,
-            node_store: RwLock::new(node_store),
-        }
+    pub fn new(config: OpeBTreeConf, node_store: BinaryNodeStore<usize, Node, Store>) -> Self {
+        let node_store = RwLock::new(node_store);
+
+        OpeBTree { config, node_store }
     }
 
     pub fn get<'a, SCmd>(&self, cmd: SCmd) -> Task<'a, ValueRef>
@@ -130,22 +130,16 @@ where
         unimplemented!()
     }
 
-    // todo refactor and continue
-    pub(self) fn load_node<'a: 's, 's>(&'s self, node_id: usize) -> Task<'s, Option<Node>> {
-        let lock = self.node_store.read();
-        // .map_err(|_| "Can't get read access to node_store".into())
-        // .then(move |store| store.get(&node_id).from_err::<BTreeErr>());
-        let res = lock.then(move |store| async move { Ok(store.get(&node_id).await?) });
-        Box::pin(res)
+    pub(self) async fn read_node(&self, node_id: usize) -> Result<Option<Node>> {
+        let lock = self.node_store.read().await;
+        let node = lock.get(node_id).await?;
+        Ok(node)
     }
 
-    pub(self) fn save_node<'a: 's, 's>(&'s mut self, node_id: usize, node: Node) -> Task<'s, ()> {
-        let result = self
-            .node_store
-            .write()
-            // .map_err(|_| "Can't get write access to node_store".into())
-            .then(move |mut store| async move { Ok(store.put(node_id, node).await?) });
-        Box::pin(result)
+    pub(self) async fn write_node(&mut self, node_id: usize, node: Node) -> Result<()> {
+        let mut lock = self.node_store.write().await;
+        lock.set(node_id, node).await?;
+        Ok(())
     }
 
     // todo put, remove, traverse
@@ -166,9 +160,12 @@ mod tests {
     use crate::common::Hash;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
 
-    fn create_node_store(mut idx: usize) -> impl NodeStore<usize, Node> {
+    fn create_node_store(
+        mut idx: usize,
+    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>> {
+        let store = HashMapKVStore::new();
         BinaryNodeStore::new(
-            HashMapKVStore::new(),
+            store,
             Box::new(move || {
                 idx += 1;
                 idx
@@ -176,7 +173,9 @@ mod tests {
         )
     }
 
-    fn create_tree<NS: NodeStore<usize, Node>>(store: NS) -> OpeBTree<NS> {
+    fn create_tree<Store: KVStore<Vec<u8>, Vec<u8>> + Send>(
+        store: BinaryNodeStore<usize, Node, Store>,
+    ) -> OpeBTree<Store> {
         OpeBTree::new(
             OpeBTreeConf {
                 arity: 8,
@@ -191,13 +190,13 @@ mod tests {
         let node_store = create_node_store(0);
         let mut tree = create_tree(node_store);
 
-        let leaf1 = tree.load_node(1).await;
+        let leaf1 = tree.read_node(1).await;
         assert_eq!(None, leaf1.unwrap());
 
-        let put = tree.save_node(1, Node::empty_leaf()).await;
+        let put = tree.write_node(1, Node::empty_leaf()).await;
         assert_eq!((), put.unwrap());
 
-        let leaf2 = tree.load_node(1).await;
+        let leaf2 = tree.read_node(1).await;
 
         assert_eq!(Some(Node::empty_leaf()), leaf2.unwrap())
 

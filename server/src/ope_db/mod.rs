@@ -3,8 +3,7 @@
 
 use crate::ope_btree::node::Node;
 use crate::ope_btree::node_store::BinaryNodeStore;
-use crate::ope_btree::node_store::NodeStore;
-use crate::ope_btree::{BTreeErr, OpeBTree};
+use crate::ope_btree::{BTreeErr, OpeBTree, ValueRef};
 use bytes::Bytes;
 use common::misc::ToBytes;
 use futures::{Future, TryStreamExt};
@@ -22,16 +21,19 @@ pub enum DbError {
         #[from]
         source: BTreeErr,
     },
-    #[error("Store Error")]
-    StoreErr, // todo needed?
+    #[error("Value Storage Error")]
+    ValStoreErr {
+        #[from]
+        source: KVStoreError,
+    },
 }
 
 pub type Result<V> = std::result::Result<V, DbError>;
 
 pub struct OpeDatabase<NS, VS>
 where
-    NS: NodeStore<usize, Node> + 'static,
-    VS: KVStore<Bytes, Bytes> + Clone,
+    NS: KVStore<Vec<u8>, Vec<u8>>,
+    VS: KVStore<Bytes, Bytes>,
 {
     /// Ope Btree index.
     index: RwLock<OpeBTree<NS>>,
@@ -39,13 +41,10 @@ where
     value_store: Arc<RwLock<VS>>,
 }
 
-// todo remove Futures and make all methods async
-type GetTask<'a> = Box<dyn Future<Output = Result<Option<Bytes>>> + Send + 'a>;
-
 impl<NS, VS> OpeDatabase<NS, VS>
 where
-    NS: NodeStore<usize, Node> + 'static,
-    VS: KVStore<Bytes, Bytes> + Clone + 'static,
+    NS: KVStore<Vec<u8>, Vec<u8>>,
+    VS: KVStore<Bytes, Bytes>,
 {
     fn new(index: OpeBTree<NS>, store: VS) -> Self {
         OpeDatabase {
@@ -62,31 +61,15 @@ where
     /// * `search_callback` - Wrapper for all callback needed for ''Get''
     /// operation to the BTree
     ///
-    pub fn get<'a, Scb: SearchCallback + 'a>(&mut self, search_callback: Scb) -> GetTask<'a> {
-        // todo async await
-        // let value_store = self.value_store.clone();
-        // let index_lock = self.index.read();
-        // let result = index_lock
-        //     .map_err(|_| "Can't get read access to OpeBtree index".into())
-        //     .and_then(move |tree| {
-        //         tree.get(search_callback)
-        //             .from_err::<DbError>()
-        //             .and_then(move |val_ref| {
-        //                 value_store
-        //                     .read()
-        //                     .map_err(|_| "Can't get read access to value bin store".into())
-        //                     .and_then(|store| {
-        //                         store
-        //                             .get(&val_ref.bytes())
-        //                             .map(|value| value.map(|val| val.to_owned()))
-        //                             .from_err::<DbError>()
-        //                     })
-        //             })
-        //     });
-
-        // Box::new(result)
-
-        todo!()
+    pub async fn get<'a, Scb: SearchCallback + 'a>(
+        &mut self,
+        search_callback: Scb,
+    ) -> Result<Option<Bytes>> {
+        let index_lock = self.index.read().await;
+        let val_ref: ValueRef = index_lock.get(search_callback).await?;
+        let val_store = self.value_store.read().await;
+        let value = val_store.get(val_ref.0).await?;
+        Ok(value)
     }
 
     // todo get, put, remove, traverse
@@ -112,7 +95,9 @@ mod tests {
 
     // todo write more test cases
 
-    fn create_node_store(mut idx: usize) -> impl NodeStore<usize, Node> {
+    fn create_node_store(
+        mut idx: usize,
+    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>> {
         BinaryNodeStore::new(
             HashMapKVStore::new(),
             Box::new(move || {
@@ -122,17 +107,19 @@ mod tests {
         )
     }
 
-    fn create_tree<NS: NodeStore<usize, Node>>(store: NS) -> OpeBTree<NS> {
+    fn create_tree<Store: KVStore<Vec<u8>, Vec<u8>>>(
+        node_store: BinaryNodeStore<usize, Node, Store>,
+    ) -> OpeBTree<Store> {
         OpeBTree::new(
             OpeBTreeConf {
                 arity: 8,
                 alpha: 0.25_f32,
             },
-            store,
+            node_store,
         )
     }
 
-    fn create_db() -> OpeDatabase<impl NodeStore<usize, Node>, HashMapKVStore<Bytes, Bytes>> {
+    fn create_db() -> OpeDatabase<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>> {
         let index = create_tree(create_node_store(0));
         OpeDatabase::new(index, HashMapKVStore::new())
     }
