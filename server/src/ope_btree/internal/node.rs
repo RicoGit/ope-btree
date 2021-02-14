@@ -153,13 +153,22 @@ pub struct ChildRef<Id> {
     checksum: Hash,
 }
 
-pub trait CloneAsBytes {
+pub trait AsBytes {
+
+    /// Clone as bytes
     fn clone_as_bytes(&self) -> Vec<Bytes>;
+
+    /// Converts into Bytes without copying
+    fn into_bytes(self) -> Vec<Bytes>;
 }
 
-impl<T: ToBytes + Clone> CloneAsBytes for Vec<T> {
+impl<T: ToBytes + Clone> AsBytes for Vec<T> {
     fn clone_as_bytes(&self) -> Vec<Bytes> {
         self.iter().map(|t| t.clone().bytes()).collect()
+    }
+
+    fn into_bytes(self) -> Vec<Bytes> {
+        self.into_iter().map(|t| t.bytes()).collect()
     }
 }
 

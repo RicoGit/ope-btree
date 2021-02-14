@@ -2,7 +2,7 @@ use crate::ope_btree::commands::Cmd;
 use crate::ope_btree::commands::CmdError;
 use crate::ope_btree::commands::Result;
 use crate::ope_btree::internal::node::BranchNode;
-use crate::ope_btree::internal::node::CloneAsBytes;
+use crate::ope_btree::internal::node::AsBytes;
 use crate::ope_btree::internal::node::LeafNode;
 
 use bytes::Bytes;
@@ -31,8 +31,8 @@ impl<Cb: BtreeCallback> Cmd<Cb> {
         let res = self
             .cb
             .next_child_idx(
-                keys.clone_as_bytes(),            // todo clone is redundant
-                children_hashes.clone_as_bytes(), // todo clone is redundant
+                keys.into_bytes(),
+                children_hashes.into_bytes(),
             )
             .await?;
 
@@ -58,10 +58,9 @@ impl<Cb: SearchCallback> Cmd<Cb> {
             ..
         }) = leaf
         {
-            // todo clone is redundant
             let res = self
                 .cb
-                .submit_leaf(keys.clone_as_bytes(), values_hashes.clone_as_bytes())
+                .submit_leaf(keys.into_bytes(), values_hashes.into_bytes())
                 .await?;
             return Ok(res);
         } else {
@@ -69,4 +68,11 @@ impl<Cb: SearchCallback> Cmd<Cb> {
             return Ok(res);
         };
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
 }
