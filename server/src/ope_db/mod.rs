@@ -1,6 +1,7 @@
 //! Server side encrypted (OPE) Key-Value database. Uses Ope-Btree as index and KVStore
 //! as backend for persisting data.
 
+use crate::ope_btree::commands::Cmd;
 use crate::ope_btree::internal::node::Node;
 use crate::ope_btree::internal::node_store::BinaryNodeStore;
 use crate::ope_btree::{BTreeErr, OpeBTree, ValueRef};
@@ -74,7 +75,7 @@ where
     ) -> Result<Option<Bytes>> {
         let index_lock = self.index.read().await;
 
-        if let Some(val_ref) = index_lock.get(search_callback).await? {
+        if let Some(val_ref) = index_lock.get(Cmd::new(search_callback)).await? {
             let val_store = self.value_store.read().await;
             let value = val_store.get(val_ref.0).await?;
             Ok(value)

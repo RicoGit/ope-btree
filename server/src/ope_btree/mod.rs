@@ -20,10 +20,10 @@ use tokio::sync::RwLock;
 use common::gen::NumGen;
 use common::Key;
 
-use crate::ope_btree::commands::SearchCmd;
-use crate::ope_btree::commands::{BTreeCmd, CmdError};
+use crate::ope_btree::commands::{Cmd, CmdError};
 use crate::ope_btree::internal::node::{BranchNode, LeafNode, Node, NodeWithId};
 use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
+use protocol::SearchCallback;
 
 pub mod commands;
 pub mod internal;
@@ -57,7 +57,10 @@ impl BTreeErr {
     }
 
     fn node_not_found(ixd: NodeId, details: &str) -> BTreeErr {
-        BTreeErr::illegal_state(&format!("Node not found for specified idx={} ({})", ixd, details))
+        BTreeErr::illegal_state(&format!(
+            "Node not found for specified idx={} ({})",
+            ixd, details
+        ))
     }
 }
 
@@ -112,21 +115,21 @@ where
 
 /// Encapsulates all logic by traversing tree for Get operation.
 #[derive(Debug, Clone)]
-struct GetFlow<GetCmd, Store>
+struct GetFlow<Cb, Store>
 where
-    GetCmd: SearchCmd + BTreeCmd,
+    Cb: SearchCallback,
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
-    cmd: GetCmd,
+    cmd: Cmd<Cb>,
     node_store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>,
 }
 
-impl<GetCmd, Store> GetFlow<GetCmd, Store>
+impl<Cb, Store> GetFlow<Cb, Store>
 where
-    GetCmd: SearchCmd + BTreeCmd,
+    Cb: SearchCallback,
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
-    fn new(cmd: GetCmd, store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>) -> Self {
+    fn new(cmd: Cmd<Cb>, store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>) -> Self {
         GetFlow {
             cmd,
             node_store: store,
@@ -140,12 +143,10 @@ where
         loop {
             if current_node.is_empty() {
                 // This is the terminal action, nothing to find in empty tree
-                return Ok(None)
+                return Ok(None);
             } else {
                 match current_node {
-                    Node::Leaf(leaf) => {
-                        return self.get_for_leaf(leaf).await
-                    },
+                    Node::Leaf(leaf) => return self.get_for_leaf(leaf).await,
                     Node::Branch(branch) => {
                         log::debug!("GetFlow: Get for branch={:?}", &branch);
                         let (_, child) = self.search_child(branch).await?;
@@ -159,7 +160,7 @@ where
     async fn get_for_leaf(self, leaf: LeafNode) -> Result<Option<ValueRef>> {
         log::debug!("GetFlow: Get for leaf={:?}", &leaf);
 
-        let response = self.cmd.submit_leaf(Some(&leaf)).await?;
+        let response = self.cmd.submit_leaf(Some(leaf.clone())).await?;
 
         match response {
             Some(Ok(idx)) => {
@@ -181,12 +182,15 @@ where
     ///
     /// Returns index of searched child and the child
     async fn search_child(&self, branch: BranchNode) -> Result<(usize, Node)> {
-        let found_idx = self.cmd.next_child_idx(&branch).await?;
-        let child_id = *branch.children_refs.get(found_idx)
+        let found_idx = self.cmd.next_child_idx(branch.clone()).await?;
+        let child_id = *branch
+            .children_refs
+            .get(found_idx)
             .ok_or_else(|| BTreeErr::node_not_found(found_idx, "Invalid node idx from client"))?;
 
         let node = self
-            .read_node(child_id).await?
+            .read_node(child_id)
+            .await?
             .ok_or_else(|| BTreeErr::node_not_found(found_idx, "Can't find in node storage"))?;
 
         Ok((child_id, node))
@@ -198,7 +202,6 @@ where
         let node = lock.get(node_id).await?;
         Ok(node)
     }
-
 }
 
 impl<Store> OpeBTree<Store>
@@ -242,9 +245,9 @@ where
     // Get
     //
 
-    pub async fn get<GetCmd>(&self, cmd: GetCmd) -> Result<Option<ValueRef>>
+    pub async fn get<Cb>(&self, cmd: Cmd<Cb>) -> Result<Option<ValueRef>>
     where
-        GetCmd: SearchCmd,
+        Cb: SearchCallback,
     {
         log::debug!("Get starts");
 
@@ -344,8 +347,21 @@ impl PutTask {
 
 #[cfg(test)]
 mod tests {
-    use kvstore_inmemory::hashmap_store::HashMapKVStore;
     use super::*;
+    use crate::ope_btree::commands::Cmd;
+    use kvstore_inmemory::hashmap_store::HashMapKVStore;
+    use mockall::{automock, mock, predicate::*};
+    use protocol::SearchResult;
+
+    // mock!{
+    //     pub TestSearchCmd { }
+    //     impl SearchCmd for TestSearchCmd {
+    //         fn submit_leaf<'f>(&self, leaf: Option<&'f LeafNode>) -> CmdFuture<'f, Option<SearchResult>>;
+    //     }
+    //     impl BTreeCmd for TestSearchCmd {
+    //         fn next_child_idx<'f>(&self, branch: &'f BranchNode) -> CmdFuture<'f, usize>;
+    //     }
+    // }
 
     fn create_node_store(
         idx: NodeId,
@@ -366,14 +382,13 @@ mod tests {
         )
     }
 
-    #[tokio::test]
-    async fn get_flow_empty_test() {
-        let node_store = create_node_store(0);
-        let mut tree = create_tree(node_store);
-
-        todo!()
-    }
-
+    // #[tokio::test]
+    // async fn get_flow_empty_test() {
+    //     let node_store = create_node_store(0);
+    //     let mut _tree = create_tree(node_store);
+    //
+    //     todo!()
+    // }
 
     #[tokio::test]
     async fn load_save_node_test() {

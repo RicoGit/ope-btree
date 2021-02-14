@@ -36,7 +36,7 @@ pub trait BtreeCallback: Send {
     /// # Arguments
     ///
     /// * `keys` - Keys of current branch for searching position
-    /// * `child_hashes` - All children's hashes of current branch
+    /// * `children_hashes` - All children's hashes of current branch
     ///
     /// # Return
     ///
@@ -45,7 +45,7 @@ pub trait BtreeCallback: Send {
     fn next_child_idx<'f>(
         &self,
         keys: Vec<Bytes>,
-        child_hashes: Vec<Bytes>,
+        children_hashes: Vec<Bytes>,
     ) -> RpcFuture<'f, usize>;
 }
 
