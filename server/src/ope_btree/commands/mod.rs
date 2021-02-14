@@ -19,6 +19,7 @@ pub struct CmdError {
 }
 
 // todo remove Future from commands, Boxed futures should be only in protocol
+// todo 'f looks redundant, consider to remove all links to Nodes
 pub type Result<V> = std::result::Result<V, CmdError>;
 
 /// Future that carries the Command result.

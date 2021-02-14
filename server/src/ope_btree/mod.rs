@@ -55,6 +55,10 @@ impl BTreeErr {
             msg: msg.to_string(),
         }
     }
+
+    fn node_not_found(ixd: NodeId, details: &str) -> BTreeErr {
+        BTreeErr::illegal_state(&format!("Node not found for specified idx={} ({})", ixd, details))
+    }
 }
 
 /// Tree root id is constant, it always points to root node in node_store.
@@ -106,8 +110,7 @@ where
     // todo should contain valRefProvider: () ⇒ ValueRef
 }
 
-// todo move outside
-
+/// Encapsulates all logic by traversing tree for Get operation.
 #[derive(Debug, Clone)]
 struct GetFlow<GetCmd, Store>
 where
@@ -130,25 +133,37 @@ where
         }
     }
 
-    async fn get_for_node(&self, node: Node) -> Result<Option<ValueRef>> {
-        if node.is_empty() {
-            Ok(None) // This is the terminal action, nothing to find in empty tree
-        } else {
-            match node {
-                Node::Leaf(leaf) => self.get_for_leaf(leaf).await,
-                Node::Branch(branch) => self.get_for_branch(branch).await,
+    /// Traverses tree and finds returns ether None or leaf, client makes decision.
+    /// It's hard to write recursion here, because it required BoxFuture with Send + Sync + 'static,
+    async fn get_for_node(self, node: Node) -> Result<Option<ValueRef>> {
+        let mut current_node = node;
+        loop {
+            if current_node.is_empty() {
+                // This is the terminal action, nothing to find in empty tree
+                return Ok(None)
+            } else {
+                match current_node {
+                    Node::Leaf(leaf) => {
+                        return self.get_for_leaf(leaf).await
+                    },
+                    Node::Branch(branch) => {
+                        log::debug!("GetFlow: Get for branch={:?}", &branch);
+                        let (_, child) = self.search_child(branch).await?;
+                        current_node = child;
+                    }
+                }
             }
         }
     }
 
-    async fn get_for_leaf(&self, leaf: LeafNode) -> Result<Option<ValueRef>> {
-        log::debug!("Get for leaf={:?}", &leaf);
+    async fn get_for_leaf(self, leaf: LeafNode) -> Result<Option<ValueRef>> {
+        log::debug!("GetFlow: Get for leaf={:?}", &leaf);
 
         let response = self.cmd.submit_leaf(Some(&leaf)).await?;
 
-        // get value ref from leaf by searched index
         match response {
             Some(Ok(idx)) => {
+                // if client returns index, fetch value for this index and send it to client
                 let value_ref = leaf.values_refs.get(idx).cloned();
                 Ok(value_ref)
             }
@@ -156,55 +171,34 @@ where
         }
     }
 
-    /// Function is recursive and required Boxed Future
-    // #[async_recursion]
-    // async fn get_for_branch(&self, branch: BranchNode) -> Result<Option<ValueRef>> {
-    //     log::debug!("Get for branch={:?}", &branch);
-    //     let (_, child) = self.search_child(branch).await?;
-    //     self.get_for_node(child).await
-    // }
-
-    // fn get_for_branch(&self, branch: BranchNode) -> BoxFuture<'static, Result<Option<ValueRef>>> {
-    //
-    //     async move {
-    //         log::debug!("Get for branch={:?}", &branch);
-    //         self.search_child(branch)
-    //             .and_then(move |(_, child)| self.get_for_node(child))
-    //             .await
-    //     }
-    //         .boxed()
-    // }
-
-    // todo finish, this function isn't compiled GetFlow should be Send
-    fn get_for_branch(&self, branch: BranchNode) -> BoxFuture<'static, Result<Option<ValueRef>>> {
-        // async move {
-        //     log::debug!("Get for branch={:?}", &branch);
-        //
-        //     let (_, child) = self.search_child(branch).await?;
-        //     let node = self.get_for_node(child).await?;
-        //     Ok(node)
-        // }
-        // .boxed()
-        todo!()
-    }
-
     /// ## Method makes remote call!
     ///
     /// Searches and returns next child node of tree.
     /// First of all we call remote client for getting index of child.
     /// After that we gets child ''nodeId'' by this index. By ''nodeId'' we fetch ''child node'' from store.
+    ///
     /// `branch` Branch node for searching
-    /// `cmd` A command for BTree execution (it's a 'bridge' for communicate with BTree client)
+    ///
     /// Returns index of searched child and the child
     async fn search_child(&self, branch: BranchNode) -> Result<(usize, Node)> {
-        // cmd
-        // .nextChildIndex(branch)
-        // .flatMap(searchedIdx ⇒ {
-        // val childId = branch.childsReferences(searchedIdx)
-        // store.get(childId).map(searchedIdx → _)
-        // })
-        todo!()
+        let found_idx = self.cmd.next_child_idx(&branch).await?;
+        let child_id = *branch.children_refs.get(found_idx)
+            .ok_or_else(|| BTreeErr::node_not_found(found_idx, "Invalid node idx from client"))?;
+
+        let node = self
+            .read_node(child_id).await?
+            .ok_or_else(|| BTreeErr::node_not_found(found_idx, "Can't find in node storage"))?;
+
+        Ok((child_id, node))
     }
+
+    async fn read_node(&self, node_id: NodeId) -> Result<Option<Node>> {
+        log::debug!("GetFlow: Read node: id={:?}", node_id);
+        let lock = self.node_store.read().await;
+        let node = lock.get(node_id).await?;
+        Ok(node)
+    }
+
 }
 
 impl<Store> OpeBTree<Store>
@@ -250,7 +244,7 @@ where
 
     pub async fn get<GetCmd>(&self, cmd: GetCmd) -> Result<Option<ValueRef>>
     where
-        GetCmd: SearchCmd + BTreeCmd,
+        GetCmd: SearchCmd,
     {
         log::debug!("Get starts");
 
@@ -371,6 +365,15 @@ mod tests {
             store,
         )
     }
+
+    #[tokio::test]
+    async fn get_flow_empty_test() {
+        let node_store = create_node_store(0);
+        let mut tree = create_tree(node_store);
+
+        todo!()
+    }
+
 
     #[tokio::test]
     async fn load_save_node_test() {
