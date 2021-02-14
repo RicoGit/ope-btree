@@ -1,16 +1,17 @@
-use crate::ope_btree::commands::Cmd;
-use crate::ope_btree::commands::CmdError;
-use crate::ope_btree::commands::Result;
-use crate::ope_btree::internal::node::BranchNode;
-use crate::ope_btree::internal::node::AsBytes;
-use crate::ope_btree::internal::node::LeafNode;
-
 use bytes::Bytes;
 use futures::future::TryFuture;
 use futures::TryFutureExt;
+
 use protocol::BtreeCallback;
 use protocol::SearchCallback;
 use protocol::SearchResult;
+
+use crate::ope_btree::commands::Cmd;
+use crate::ope_btree::commands::CmdError;
+use crate::ope_btree::commands::Result;
+use crate::ope_btree::internal::node::AsBytes;
+use crate::ope_btree::internal::node::BranchNode;
+use crate::ope_btree::internal::node::LeafNode;
 
 impl<Cb: BtreeCallback> Cmd<Cb> {
     /// Returns a next child index to makes the next step down the tree.
@@ -30,10 +31,7 @@ impl<Cb: BtreeCallback> Cmd<Cb> {
 
         let res = self
             .cb
-            .next_child_idx(
-                keys.into_bytes(),
-                children_hashes.into_bytes(),
-            )
+            .next_child_idx(keys.into_bytes(), children_hashes.into_bytes())
             .await?;
 
         Ok(res)
@@ -51,28 +49,76 @@ impl<Cb: SearchCallback> Cmd<Cb> {
     ///
     /// * `leaf` -  A leaf node of OpeBTree for searching.
     ///
-    pub async fn submit_leaf(&self, leaf: Option<LeafNode>) -> Result<Option<SearchResult>> {
-        let future = if let Some(LeafNode {
+    pub async fn submit_leaf(&self, leaf: LeafNode) -> Result<SearchResult> {
+        let LeafNode {
             keys,
             values_hashes,
             ..
-        }) = leaf
-        {
-            let res = self
-                .cb
-                .submit_leaf(keys.into_bytes(), values_hashes.into_bytes())
-                .await?;
-            return Ok(res);
-        } else {
-            let res = self.cb.leaf_not_found().await?;
-            return Ok(res);
-        };
+        } = leaf;
+
+        let res = self
+            .cb
+            .submit_leaf(keys.into_bytes(), values_hashes.into_bytes())
+            .await?;
+        return Ok(res);
     }
 }
 
-
 #[cfg(test)]
-mod tests {
+pub mod tests {
+    use std::cell::Cell;
+
+    use futures::FutureExt;
+
+    use protocol::RpcFuture;
+
     use super::*;
 
+    pub struct TestCallback {
+        next_child_idx_vec: Cell<Vec<usize>>,
+        submit_leaf_vec: Cell<Vec<SearchResult>>,
+    }
+
+    impl TestCallback {
+        pub fn new(next_child_idx_vec: Vec<usize>, submit_leaf_vec: Vec<SearchResult>) -> Self {
+            TestCallback {
+                next_child_idx_vec: Cell::new(next_child_idx_vec),
+                submit_leaf_vec: Cell::new(submit_leaf_vec),
+            }
+        }
+
+        pub fn empty() -> Self {
+            TestCallback::new(vec![], vec![])
+        }
+    }
+
+    impl BtreeCallback for TestCallback {
+        fn next_child_idx<'f>(
+            &self,
+            _keys: Vec<Bytes>,
+            _children_hashes: Vec<Bytes>,
+        ) -> RpcFuture<'f, usize> {
+            let mut vec = self.next_child_idx_vec.take();
+            let res = vec
+                .pop()
+                .expect("TestCallback.next_child_idx: index should be appeared");
+            self.next_child_idx_vec.replace(vec);
+            async move { Ok(res) }.boxed()
+        }
+    }
+
+    impl SearchCallback for TestCallback {
+        fn submit_leaf<'f>(
+            &self,
+            _keys: Vec<Bytes>,
+            _values_hashes: Vec<Bytes>,
+        ) -> RpcFuture<'f, SearchResult> {
+            let mut vec = self.submit_leaf_vec.take();
+            let res = vec
+                .pop()
+                .expect("TestCallback.submit_leaf: SearchResult should be appeared");
+            self.submit_leaf_vec.replace(vec);
+            async move { Ok(res) }.boxed()
+        }
+    }
 }

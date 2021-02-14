@@ -160,10 +160,10 @@ where
     async fn get_for_leaf(self, leaf: LeafNode) -> Result<Option<ValueRef>> {
         log::debug!("GetFlow: Get for leaf={:?}", &leaf);
 
-        let response = self.cmd.submit_leaf(Some(leaf.clone())).await?;
+        let response = self.cmd.submit_leaf(leaf.clone()).await?;
 
         match response {
-            Some(Ok(idx)) => {
+            Ok(idx) => {
                 // if client returns index, fetch value for this index and send it to client
                 let value_ref = leaf.values_refs.get(idx).cloned();
                 Ok(value_ref)
@@ -348,20 +348,11 @@ impl PutTask {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ope_btree::commands::search_cmd::tests::*;
     use crate::ope_btree::commands::Cmd;
+    use crate::ope_btree::BTreeErr::IllegalStateErr;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
-    use mockall::{automock, mock, predicate::*};
     use protocol::SearchResult;
-
-    // mock!{
-    //     pub TestSearchCmd { }
-    //     impl SearchCmd for TestSearchCmd {
-    //         fn submit_leaf<'f>(&self, leaf: Option<&'f LeafNode>) -> CmdFuture<'f, Option<SearchResult>>;
-    //     }
-    //     impl BTreeCmd for TestSearchCmd {
-    //         fn next_child_idx<'f>(&self, branch: &'f BranchNode) -> CmdFuture<'f, usize>;
-    //     }
-    // }
 
     fn create_node_store(
         idx: NodeId,
@@ -382,13 +373,30 @@ mod tests {
         )
     }
 
-    // #[tokio::test]
-    // async fn get_flow_empty_test() {
-    //     let node_store = create_node_store(0);
-    //     let mut _tree = create_tree(node_store);
-    //
-    //     todo!()
-    // }
+    #[tokio::test]
+    #[should_panic]
+    async fn forgot_run_init_test() {
+        // forgot run init before get
+        let tree = create_tree(create_node_store(0));
+        tree.get(Cmd::new(TestCallback::empty())).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_flow_empty_test() {
+        let node_store = create_node_store(0);
+        let mut tree = create_tree(node_store);
+        tree.init().await.unwrap();
+
+        let cmd = Cmd::new(TestCallback::empty());
+        let res1 = tree.get(Cmd::new(TestCallback::empty())).await;
+        assert_eq!(res1.unwrap(), None);
+
+        let cmd = Cmd::new(TestCallback::new(vec![1], vec![]));
+        let res2 = tree.get(cmd).await;
+        assert_eq!(res2.unwrap(), None);
+    }
+
+    // todo more tests for GetFlow
 
     #[tokio::test]
     async fn load_save_node_test() {

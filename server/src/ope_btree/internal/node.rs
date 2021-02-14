@@ -154,7 +154,6 @@ pub struct ChildRef<Id> {
 }
 
 pub trait AsBytes {
-
     /// Clone as bytes
     fn clone_as_bytes(&self) -> Vec<Bytes>;
 
