@@ -65,14 +65,12 @@ impl<Cb: SearchCallback> Cmd<Cb> {
 }
 
 #[cfg(test)]
+// todo remove to mod and create impl for PutCmd
 pub mod tests {
-    use std::cell::Cell;
-
-    use futures::FutureExt;
-
-    use protocol::RpcFuture;
-
     use super::*;
+    use futures::FutureExt;
+    use protocol::RpcFuture;
+    use std::cell::Cell;
 
     pub struct TestCallback {
         next_child_idx_vec: Cell<Vec<usize>>,

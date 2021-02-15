@@ -7,11 +7,16 @@ pub mod misc;
 #[cfg(test)]
 pub mod noop_hasher;
 
+use crate::misc::AsString;
 use bytes::{Bytes, BytesMut};
 use misc::ToBytes;
 use serde::{Deserialize, Serialize};
 use sha3::digest::generic_array::ArrayLength;
 use sha3::digest::generic_array::GenericArray;
+pub use sha3::Digest;
+use std::fmt::{Display, Formatter};
+
+pub const STR_END_SIGN: u8 = 0_u8;
 
 /// A ciphered key for retrieve a value.
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
@@ -58,10 +63,22 @@ impl AsRef<[u8]> for Hash {
     }
 }
 
+/// Calculates hash from specified data
+pub fn get_hash<D: Digest, R: AsRef<[u8]>>(slice: R) -> Hash {
+    Hash::from(D::digest(slice.as_ref()))
+}
+
+impl Display for Hash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = self.as_str().unwrap_or_else(|_| "[]".to_string());
+        write!(f, "Hash[{}, {}]", str.len(), str)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::Hash;
-    use bytes::BytesMut;
+    use crate::{Hash, STR_END_SIGN};
+    use bytes::{BufMut, BytesMut};
 
     #[test]
     fn is_empty_test() {
@@ -116,6 +133,14 @@ mod tests {
     #[test]
     fn hash_as_ref_test() {
         assert_eq!("hash".as_bytes(), hash("hash").as_ref())
+    }
+
+    #[test]
+    fn display_test() {
+        let mut input = hash("start");
+        input.0.put_u8(STR_END_SIGN);
+        input.concat(hash("end"));
+        assert_eq!(format!("{}", input), "Hash[5, start]")
     }
 
     fn hash(str: &str) -> Hash {

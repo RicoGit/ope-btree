@@ -92,7 +92,7 @@ pub trait PutCallbacks: BtreeCallback {
     ///
     /// # Arguments
     ///
-    /// * `keys` - Keys of current branch for searching an position
+    /// * `keys` - Keys of current branch for searching position
     /// * `values_hashes` - Hashes of values for current leaf
     ///
     /// # Return

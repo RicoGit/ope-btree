@@ -1,4 +1,4 @@
-use super::Hash;
+use crate::{get_hash, Hash};
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
@@ -33,7 +33,7 @@ pub struct NodeProof {
     state_hash: Hash,
     /// An array of child's hashes, which participates in the substitution.
     ///
-    /// For leafs `children_hashes` is a sequence with hashes of each 'key-value'
+    /// For leaf's `children_hashes` is a sequence with hashes of each 'key-value'
     /// pair of this leaf and `substitution_idx` is an index for inserting hash
     /// of 'key-value' pair.
     ///
@@ -70,15 +70,13 @@ impl NodeProof {
         })
     }
 
-    /// Calculates a merkle root hash for the current merkle proof and the
-    /// substituted value.
+    /// Calculates a checksum (hash) for the current node proof and the substituted value.
     ///
     /// # Arguments
     ///
     /// * `hash_for_substitution` - Child's hash for substitution to ''children_hashes''
     ///
-    pub fn into_merkle_root<D: Digest>(self, hash_for_substitution: Option<Hash>) -> Hash {
-        let mut hasher = D::new();
+    pub fn calc_checksum<D: Digest>(self, hash_for_substitution: Option<Hash>) -> Hash {
         let state = match hash_for_substitution {
             None => {
                 // if a hash for substitution isn't defined just calculate node hash
@@ -109,8 +107,7 @@ impl NodeProof {
         // todo I'm not sure, check this invariant
         assert!(!state.is_empty(), "Empty NodeProof doesn't make any sense");
 
-        hasher.update(state);
-        hasher.finalize().into()
+        get_hash::<D, _>(state)
     }
 }
 
@@ -123,30 +120,53 @@ pub struct MerklePath(
 );
 
 impl MerklePath {
+    pub fn empty() -> Self {
+        MerklePath(vec![])
+    }
+
     /// Adds new `proof` to the end of the merkle path.
     pub fn add(&mut self, proof: NodeProof) {
         self.0.push(proof);
+    }
+
+    /// Calculates new merkle root from merkle path. Folds merkle path from the right to the left and
+    /// calculate merkle tree root. Inserts ''substituted_checksum'' into element in last position in merkle path.
+    /// Substitution into the last element occurs at the substitution idx of this element.
+    pub fn calc_merkle_root<D: Digest>(self, substituted_checksum: Option<Hash>) -> Hash {
+        let folded_path = self
+            .0
+            .into_iter()
+            .rfold(substituted_checksum.clone(), |prev_hash, node_proof| {
+                Some(node_proof.calc_checksum::<D>(prev_hash))
+            });
+
+        folded_path.unwrap_or_else(|| {
+            substituted_checksum
+                .map(|cs| get_hash::<D, _>(cs).into())
+                .unwrap_or_default()
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::merkle::MerklePath;
-    use crate::merkle::NodeProof;
+    use crate::merkle::{MerklePath, NodeProof};
     use crate::misc::ToBytes;
-    use crate::Hash;
+    use crate::noop_hasher::NoOpHasher;
+    use crate::{get_hash, Hash};
     use bytes::BytesMut;
-    use sha3::Digest;
     use sha3::Sha3_256;
 
     #[test]
     fn node_proof_new_err_test() {
+        // create invalid NodeProof
         let proof = NodeProof::try_new(Hash::empty(), Vec::new(), 10);
         assert!(proof.is_err())
     }
 
     #[test]
     fn node_proof_new_ok_test() {
+        // create valid NodeProof
         let proof = NodeProof::try_new(Hash::empty(), vec![Hash::empty()], 0);
         let expected = NodeProof {
             state_hash: Hash::empty(),
@@ -157,9 +177,10 @@ mod tests {
     }
 
     #[test]
-    fn without_substitution_node_proof_to_merkle_root_test() {
+    fn without_substitution_node_proof_to_checksum_test() {
+        // Calculate checksum of nodeProof without substitution
         let proof = node_proof("state");
-        let result = proof.clone().into_merkle_root::<Sha3_256>(None);
+        let result = proof.clone().calc_checksum::<Sha3_256>(None);
 
         let NodeProof {
             mut state_hash,
@@ -169,17 +190,18 @@ mod tests {
 
         let expected_hash = {
             state_hash.concat_all(children_hashes);
-            get_hash::<Sha3_256>(state_hash.bytes().as_ref())
+            get_hash::<Sha3_256, _>(state_hash.bytes().as_ref())
         };
         assert_eq!(expected_hash, result)
     }
 
     #[test]
-    fn with_substitution_node_proof_to_merkle_root_test() {
+    fn with_substitution_node_proof_to_checksum_test() {
+        // Calculate checksum of nodeProof with substitution
         let proof = node_proof("state");
         let result = proof
             .clone()
-            .into_merkle_root::<Sha3_256>(Some(hash("new_hash")));
+            .calc_checksum::<Sha3_256>(Some(hash("new_hash")));
 
         let NodeProof {
             mut state_hash,
@@ -190,31 +212,56 @@ mod tests {
         let expected_hash = {
             children_hashes.insert(substitution_idx, hash("new_hash"));
             state_hash.concat_all(children_hashes);
-            get_hash::<Sha3_256>(state_hash.bytes().as_ref())
+            get_hash::<Sha3_256, _>(state_hash.bytes().as_ref())
         };
 
         assert_eq!(expected_hash, result)
     }
 
-    fn get_hash<D: Digest>(slice: &[u8]) -> Hash {
-        Hash::from(D::digest(slice))
+    #[test]
+    fn node_proof_checksum_noop_hasher_test() {
+        // Calculate checksum of nodeProof with substitution for with noopHasher
+        let proof = node_proof("State");
+        let result = proof
+            .clone()
+            .calc_checksum::<NoOpHasher>(Some(hash("New_hash")));
+
+        assert_eq!(
+            format!("{}", result),
+            "Hash[33, [StateChild1New_hashChild2Child3]]"
+        )
     }
 
     #[test]
     fn merkle_path_add_test() {
+        // Adds new NodeProof to MerklePath
         let proof1 = node_proof("proof1");
         let proof2 = node_proof("proof2");
-        let mut m_path = MerklePath(vec![]);
+        let mut m_path = MerklePath::empty();
         m_path.add(proof1.clone());
         assert_eq!(MerklePath(vec![proof1.clone()]), m_path);
         m_path.add(proof2.clone());
         assert_eq!(MerklePath(vec![proof1.clone(), proof2.clone()]), m_path);
     }
 
+    // todo merkle_path_to_root_test
+    // todo merkle_path_to_root_noop_hasher_test
+
+    // #[test]
+    // fn merkle_path_to_root_test() {
+    //     let proof1 = node_proof("proof1");
+    //     let proof2 = node_proof("proof2");
+    //     let mut m_path = MerklePath::empty();
+    //     m_path.add(proof1.clone());
+    //     assert_eq!(MerklePath(vec![proof1.clone()]), m_path);
+    //     m_path.add(proof2.clone());
+    //     assert_eq!(MerklePath(vec![proof1.clone(), proof2.clone()]), m_path);
+    // }
+
     fn node_proof(state: &str) -> NodeProof {
         NodeProof {
             state_hash: Hash(BytesMut::from(state)),
-            children_hashes: vec![hash("child1"), hash("child2"), hash("child3")],
+            children_hashes: vec![hash("Child1"), hash("Child2"), hash("Child3")],
             substitution_idx: 1,
         }
     }

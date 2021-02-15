@@ -1,5 +1,6 @@
 //! `No-operation` implementation for `Digest`, for debug purpose only.
 
+use crate::STR_END_SIGN;
 use sha3::digest::generic_array::typenum::U512;
 use sha3::digest::generic_array::GenericArray;
 use sha3::digest::Output;
@@ -24,9 +25,16 @@ impl Digest for NoOpHasher {
         let data = Vec::with_capacity(HASH_SIZE);
         NoOpHasher {
             wrapper: ('[', ']'),
-            end_sign: 0_u8,
+            end_sign: STR_END_SIGN,
             data,
         }
+    }
+
+    fn update(&mut self, data: impl AsRef<[u8]>) {
+        if self.data.is_empty() {
+            self.data.push(b'[')
+        }
+        self.data.extend_from_slice(data.as_ref());
     }
 
     fn chain(mut self, data: impl AsRef<[u8]>) -> Self
@@ -35,27 +43,6 @@ impl Digest for NoOpHasher {
     {
         self.update(data);
         self
-    }
-
-    fn reset(&mut self) {
-        self.data.clear()
-    }
-
-    fn output_size() -> usize {
-        HASH_SIZE
-    }
-
-    fn digest(data: &[u8]) -> GenericArray<u8, Self::OutputSize> {
-        let mut hasher = Self::new();
-        hasher.update(data);
-        hasher.finalize()
-    }
-
-    fn update(&mut self, data: impl AsRef<[u8]>) {
-        if self.data.is_empty() {
-            self.data.push(b'[')
-        }
-        self.data.extend_from_slice(data.as_ref());
     }
 
     fn finalize(self) -> Output<Self> {
@@ -96,18 +83,19 @@ impl Digest for NoOpHasher {
             HASH_SIZE
         ))
     }
-}
 
-pub trait AsString {
-    fn as_str(&self) -> Result<String, String>;
-}
+    fn reset(&mut self) {
+        self.data.clear()
+    }
 
-impl AsString for GenericArray<u8, U512> {
-    /// Converts 'GenericArray' to UTF-8 string and truncate tail with zeroes.
-    fn as_str(&self) -> Result<String, String> {
-        String::from_utf8(self.to_vec())
-            .map(|str| str.split(0_u8 as char).take(1).collect())
-            .map_err(|err| err.to_string())
+    fn output_size() -> usize {
+        HASH_SIZE
+    }
+
+    fn digest(data: &[u8]) -> GenericArray<u8, Self::OutputSize> {
+        let mut hasher = Self::new();
+        hasher.update(data);
+        hasher.finalize()
     }
 }
 
@@ -115,6 +103,7 @@ impl AsString for GenericArray<u8, U512> {
 mod tests {
 
     use super::*;
+    use crate::misc::AsString;
     use sha3::Digest;
 
     #[test]
