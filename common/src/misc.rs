@@ -10,9 +10,21 @@ impl From<Key> for BytesMut {
     }
 }
 
+impl From<Bytes> for Key {
+    fn from(bytes: Bytes) -> Self {
+        Key(BytesMut::from(bytes.as_ref()))
+    }
+}
+
 impl From<Hash> for BytesMut {
     fn from(hash: Hash) -> Self {
         hash.0
+    }
+}
+
+impl From<Bytes> for Hash {
+    fn from(bytes: Bytes) -> Self {
+        Hash(BytesMut::from(bytes.as_ref()))
     }
 }
 

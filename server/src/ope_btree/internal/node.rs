@@ -2,8 +2,9 @@
 
 use crate::ope_btree::ValueRef;
 use bytes::Bytes;
+use common::merkle::{MerkleError, NodeProof};
 use common::misc::ToBytes;
-use common::{Hash, Key};
+use common::{Digest, Hash, Key};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
@@ -19,7 +20,7 @@ pub enum Node {
 impl Node {
     /// Creates and returns a new empty Leaf.
     pub fn empty_leaf() -> Node {
-        Node::Leaf(LeafNode::new())
+        Node::Leaf(LeafNode::empty())
     }
 
     /// Creates and returns a new empty Branch.
@@ -66,8 +67,45 @@ pub struct LeafNode {
 
 impl LeafNode {
     /// Creates and returns a new empty LeafNode.
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         LeafNode::default()
+    }
+
+    /// Create new leaf with specified ''key'' and ''value''
+    pub fn create<D: Digest>(
+        key: Key,
+        value_ref: ValueRef,
+        value_hash: Hash,
+    ) -> Result<LeafNode, MerkleError> {
+        let keys = vec![key];
+        let values_refs = vec![value_ref];
+        let values_hashes = vec![value_hash];
+        let kv_hashes = LeafNode::build_checksum::<D>(keys.clone(), values_hashes.clone());
+        let hash =
+            NodeProof::try_new(Hash::empty(), kv_hashes.clone(), None)?.calc_checksum::<D>(None);
+        let leaf = LeafNode {
+            keys,
+            values_refs,
+            values_hashes,
+            kv_hashes,
+            size: 1,
+            hash,
+            right_sibling: None,
+        };
+
+        Ok(leaf)
+    }
+
+    /// Returns array of checksums for each key-value pair
+    fn build_checksum<D: Digest>(keys: Vec<Key>, values: Vec<Hash>) -> Vec<Hash> {
+        keys.into_iter()
+            .zip(values.into_iter())
+            .map(|(k, v)| {
+                let mut key: Hash = k.into();
+                key.concat(v);
+                key
+            })
+            .collect()
     }
 }
 
@@ -141,9 +179,15 @@ impl TreeNode for Node {
 
 /// Wrapper for the node with its corresponding id
 #[derive(Clone, Debug, Default)]
-pub struct NodeWithId<Id, Node: TreeNode> {
+pub struct NodeWithId<Id, Node> {
     pub id: Id,
     pub node: Node,
+}
+
+impl<Id, Node: TreeNode> NodeWithId<Id, Node> {
+    pub fn new(id: Id, node: Node) -> Self {
+        NodeWithId { id, node }
+    }
 }
 
 /// Wrapper of the child id and the checksum

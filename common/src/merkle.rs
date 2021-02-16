@@ -42,21 +42,21 @@ pub struct NodeProof {
     /// of child.
     children_hashes: Vec<Hash>,
     /// An index for a substitution some child hash to `children_hashes`
-    substitution_idx: usize,
-    // todo looks like substitution_idx isn't required for leaf proof
+    substitution_idx: Option<usize>,
 }
 
 impl NodeProof {
     /// Validates params and create `NodeProof`.
+    /// substitution_idx=None is special values that skip first assert
     pub fn try_new(
         state_hash: Hash,
         children_hashes: Vec<Hash>,
-        substitution_idx: usize,
+        substitution_idx: Option<usize>,
     ) -> Result<Self> {
-        if substitution_idx >= children_hashes.len() {
+        if substitution_idx.is_some() && substitution_idx.unwrap() >= children_hashes.len() {
             return Err(MerkleError::IndexErr {
                 msg: format!(
-                    "Substitution index have to be less than number of children hashes {}, but actually it is {}",
+                    "Substitution index have to be less than number of children hashes {}, but actually it is {:?}",
                     children_hashes.len(),
                     substitution_idx
                 ),
@@ -98,6 +98,8 @@ impl NodeProof {
                     substitution_idx,
                 } = self;
 
+                let substitution_idx =
+                    substitution_idx.expect("substitution_idx should be defined");
                 let _old = std::mem::replace(&mut children_hashes[substitution_idx], hash);
                 state_hash.concat_all(children_hashes);
                 state_hash
@@ -120,6 +122,10 @@ pub struct MerklePath(
 );
 
 impl MerklePath {
+    pub fn new(proof: NodeProof) -> Self {
+        MerklePath(vec![proof])
+    }
+
     pub fn empty() -> Self {
         MerklePath(vec![])
     }
@@ -160,18 +166,18 @@ mod tests {
     #[test]
     fn node_proof_new_err_test() {
         // create invalid NodeProof
-        let proof = NodeProof::try_new(Hash::empty(), Vec::new(), 10);
+        let proof = NodeProof::try_new(Hash::empty(), Vec::new(), Some(10));
         assert!(proof.is_err())
     }
 
     #[test]
     fn node_proof_new_ok_test() {
         // create valid NodeProof
-        let proof = NodeProof::try_new(Hash::empty(), vec![Hash::empty()], 0);
+        let proof = NodeProof::try_new(Hash::empty(), vec![Hash::empty()], Some(0));
         let expected = NodeProof {
             state_hash: Hash::empty(),
             children_hashes: vec![Hash::empty()],
-            substitution_idx: 0,
+            substitution_idx: Some(0),
         };
         assert_eq!(expected, proof.unwrap())
     }
@@ -222,7 +228,7 @@ mod tests {
 
         let expected_hash = {
             let old = std::mem::replace(
-                &mut children_hashes[substitution_idx],
+                &mut children_hashes[substitution_idx.unwrap()],
                 Hash::from_str("#new#"),
             );
             assert_eq!(old, Hash::from_str("Child2"));
@@ -275,7 +281,7 @@ mod tests {
                 Hash::from_str("Child2"),
                 Hash::from_str("Child3"),
             ],
-            substitution_idx: 1,
+            substitution_idx: Some(1),
         }
     }
 

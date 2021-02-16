@@ -24,7 +24,7 @@ pub type Result<V> = std::result::Result<V, CmdError>;
 /// Structs for any OpeBTree commands.
 #[derive(Debug, Clone)]
 pub struct Cmd<Cb> {
-    cb: Cb,
+    pub cb: Cb,
 }
 
 impl<Cb> Cmd<Cb> {
@@ -45,7 +45,7 @@ pub mod tests {
     pub struct TestCallback {
         next_child_idx_vec: Cell<Vec<usize>>,
         submit_leaf_vec: Cell<Vec<SearchResult>>,
-        put_details_vec: Cell<Vec<SearchResult>>,
+        put_details_vec: Cell<Vec<ClientPutDetails>>,
         verify_changes_vec: Cell<Vec<Bytes>>,
     }
 
@@ -53,7 +53,7 @@ pub mod tests {
         pub fn new(
             next_child_idx_vec: Vec<usize>,
             submit_leaf_vec: Vec<SearchResult>,
-            put_details_vec: Vec<SearchResult>,
+            put_details_vec: Vec<ClientPutDetails>,
             verify_changes_vec: Vec<Bytes>,
         ) -> Self {
             TestCallback {
@@ -65,7 +65,7 @@ pub mod tests {
         }
 
         pub fn empty() -> Self {
-            TestCallback::new(vec![], vec![], vec![] , vec![])
+            TestCallback::new(vec![], vec![], vec![], vec![])
         }
     }
 
@@ -129,7 +129,9 @@ pub mod tests {
         fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
             async {
                 log::info!("TestCallback.changes_stored: All changes stored");
+                Ok(())
             }
+            .boxed()
         }
     }
 }

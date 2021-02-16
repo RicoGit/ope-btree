@@ -7,6 +7,7 @@ use crate::ope_btree::internal::node_store::BinaryNodeStore;
 use crate::ope_btree::{BTreeErr, OpeBTree, ValueRef};
 use bytes::Bytes;
 use common::misc::ToBytes;
+use common::Digest;
 use futures::{Future, TryStreamExt};
 use kvstore_api::kvstore::KVStore;
 use kvstore_api::kvstore::*;
@@ -31,23 +32,23 @@ pub enum DbError {
 
 pub type Result<V> = std::result::Result<V, DbError>;
 
-pub struct OpeDatabase<NS, VS>
+pub struct OpeDatabase<NS, VS, D>
 where
     NS: KVStore<Vec<u8>, Vec<u8>>,
     VS: KVStore<Bytes, Bytes>,
 {
     /// Ope Btree index.
-    index: RwLock<OpeBTree<NS>>,
+    index: RwLock<OpeBTree<NS, D>>,
     /// Blob storage for persisting encrypted values.
     value_store: Arc<RwLock<VS>>,
 }
 
-impl<NS, VS> OpeDatabase<NS, VS>
+impl<NS, VS, D: Digest> OpeDatabase<NS, VS, D>
 where
     NS: KVStore<Vec<u8>, Vec<u8>>,
     VS: KVStore<Bytes, Bytes>,
 {
-    fn new(index: OpeBTree<NS>, store: VS) -> Self {
+    fn new(index: OpeBTree<NS, D>, store: VS) -> Self {
         OpeDatabase {
             index: RwLock::new(index),
             value_store: Arc::new(RwLock::new(store)),
@@ -92,6 +93,7 @@ mod tests {
     use super::*;
     use crate::ope_btree::OpeBTreeConf;
     use common::gen::NumGen;
+    use common::noop_hasher::NoOpHasher;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
 
     #[tokio::test]
@@ -117,7 +119,7 @@ mod tests {
 
     fn create_tree<Store: KVStore<Vec<u8>, Vec<u8>>>(
         node_store: BinaryNodeStore<usize, Node, Store, NumGen>,
-    ) -> OpeBTree<Store> {
+    ) -> OpeBTree<Store, NoOpHasher> {
         OpeBTree::new(
             OpeBTreeConf {
                 arity: 8,
@@ -128,7 +130,8 @@ mod tests {
     }
 
     async fn create_db(
-    ) -> OpeDatabase<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>> {
+    ) -> OpeDatabase<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>, NoOpHasher>
+    {
         let index = create_tree(create_node_store(0));
         let mut db = OpeDatabase::new(index, HashMapKVStore::new());
         assert!(db.init().await.is_ok());

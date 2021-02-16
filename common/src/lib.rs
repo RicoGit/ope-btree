@@ -4,7 +4,6 @@ pub mod gen;
 pub mod merkle;
 pub mod misc;
 
-#[cfg(test)]
 pub mod noop_hasher;
 
 use crate::misc::AsString;
@@ -58,6 +57,12 @@ impl Hash {
         for hash in hashes.into_iter() {
             self.concat(hash)
         }
+    }
+}
+
+impl From<Key> for Hash {
+    fn from(key: Key) -> Self {
+        Hash(key.0)
     }
 }
 

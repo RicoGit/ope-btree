@@ -57,7 +57,7 @@ where
         }
     }
 
-    fn next_id(&mut self) -> Id {
+    pub fn next_id(&mut self) -> Id {
         self.id_generator.next()
     }
 

@@ -18,12 +18,14 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use common::gen::NumGen;
-use common::Key;
+use common::{Digest, Hash, Key};
 
 use crate::ope_btree::commands::{Cmd, CmdError};
 use crate::ope_btree::internal::node::{BranchNode, LeafNode, Node, NodeWithId};
 use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
-use protocol::SearchCallback;
+use common::merkle::{MerkleError, MerklePath, NodeProof};
+use common::misc::ToBytes;
+use protocol::{ProtocolError, PutCallbacks, SearchCallback};
 
 pub mod commands;
 pub mod internal;
@@ -42,6 +44,16 @@ pub enum BTreeErr {
     CmdErr {
         #[from]
         source: CmdError,
+    },
+    #[error("Merkle Error")]
+    MerkleErr {
+        #[from]
+        source: MerkleError,
+    },
+    #[error("Protocol Error")]
+    ProtocolErr {
+        #[from]
+        source: ProtocolError,
     },
     #[error("Illegal State Error: {msg:?}")]
     IllegalStateErr { msg: String },
@@ -103,14 +115,14 @@ pub struct OpeBTreeConf {
 ///
 /// [`NodeStore`]: ../node_store/trait.NodeStore.html
 /// [`BTreeCommand`]: ../command/trait.BTreeCommand.html
-pub struct OpeBTree<Store>
+pub struct OpeBTree<Store, D>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
     node_store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>,
     depth: AtomicUsize,
     config: OpeBTreeConf,
-    // todo should contain valRefProvider: () ⇒ ValueRef
+    phantom_data: PhantomData<D>, // todo should contain valRefProvider: () ⇒ ValueRef
 }
 
 /// Encapsulates all logic by traversing tree for Get operation.
@@ -172,8 +184,6 @@ where
         }
     }
 
-    /// ## Method makes remote call!
-    ///
     /// Searches and returns next child node of tree.
     /// First of all we call remote client for getting index of child.
     /// After that we gets child ''nodeId'' by this index. By ''nodeId'' we fetch ''child node'' from store.
@@ -204,7 +214,38 @@ where
     }
 }
 
-impl<Store> OpeBTree<Store>
+/// Encapsulates all logic for putting into tree
+#[derive(Debug, Clone)]
+struct PutFlow<Cb, Store>
+where
+    Cb: PutCallbacks,
+    Store: KVStore<Vec<u8>, Vec<u8>>,
+{
+    cmd: Cmd<Cb>,
+    node_store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>,
+}
+
+impl<Cb, Store> PutFlow<Cb, Store>
+where
+    Cb: PutCallbacks,
+    Store: KVStore<Vec<u8>, Vec<u8>>,
+{
+    fn new(cmd: Cmd<Cb>, store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>) -> Self {
+        PutFlow {
+            cmd,
+            node_store: store,
+        }
+    }
+
+    async fn read_node(&self, node_id: NodeId) -> Result<Option<Node>> {
+        log::debug!("GetFlow: Read node: id={:?}", node_id);
+        let lock = self.node_store.read().await;
+        let node = lock.get(node_id).await?;
+        Ok(node)
+    }
+}
+
+impl<Store, D: Digest> OpeBTree<Store, D>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
@@ -218,6 +259,7 @@ where
             config,
             depth,
             node_store,
+            phantom_data: PhantomData::default(),
         }
     }
 
@@ -254,6 +296,61 @@ where
         let root = self.get_root().await?;
         let flow = GetFlow::new(cmd, self.node_store.clone());
         flow.get_for_node(root).await
+    }
+
+    //
+    // Put
+    //
+
+    pub async fn put<Cb>(&mut self, cmd: Cmd<Cb>) -> Result<Option<ValueRef>>
+    where
+        Cb: PutCallbacks,
+    {
+        log::debug!("Put starts");
+
+        let root = self.get_root().await?;
+
+        if root.is_empty() {
+            // if root is empty don't need to finding slot for putting
+            log::debug!("Root node is empty, put in Root node");
+            // send to client empty details, client answers with put details
+            let put_details = cmd.cb.put_details(vec![], vec![]).await?;
+            let value_ref = self.next_value_ref().await;
+            let new_leaf = LeafNode::create::<D>(
+                put_details.key.into(),
+                value_ref.clone(),
+                put_details.val_hash.into(),
+            )?;
+
+            // send the merkle path to the client for verification
+            let leaf_proof =
+                NodeProof::try_new(Hash::empty(), new_leaf.kv_hashes.clone(), Some(0))?;
+            let merkle_root = MerklePath::new(leaf_proof).calc_merkle_root::<D>(None);
+            let _signed_root = cmd.cb.verify_changes(merkle_root.bytes(), false).await?;
+
+            // Safe changes
+            let task = PutTask::new(
+                vec![NodeWithId::new(ROOT_ID, Node::Leaf(new_leaf))],
+                true,
+                false,
+            );
+            self.commit_new_state(task).await?;
+            Ok(Some(value_ref))
+        } else {
+            // todo finish and create valRefProvider !!!
+            Ok(None)
+        }
+    }
+
+    /// Generates new value reference
+    async fn next_value_ref(&self) -> ValueRef {
+        todo!()
+    }
+
+    /// Generates new btree node reference
+    async fn next_node_ref(&self) -> NodeId {
+        let mut store = self.node_store.write().await;
+        store.next_id()
     }
 
     /// Gets or creates root node
@@ -348,11 +445,12 @@ impl PutTask {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ope_btree::commands::tests::TestCallback;
     use crate::ope_btree::commands::Cmd;
     use crate::ope_btree::BTreeErr::IllegalStateErr;
+    use common::noop_hasher::NoOpHasher;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
     use protocol::SearchResult;
-    use crate::ope_btree::commands::tests::TestCallback;
 
     fn create_node_store(
         idx: NodeId,
@@ -363,7 +461,7 @@ mod tests {
 
     fn create_tree<Store: KVStore<Vec<u8>, Vec<u8>> + Send>(
         store: BinaryNodeStore<NodeId, Node, Store, NumGen>,
-    ) -> OpeBTree<Store> {
+    ) -> OpeBTree<Store, NoOpHasher> {
         OpeBTree::new(
             OpeBTreeConf {
                 arity: 8,
@@ -371,6 +469,13 @@ mod tests {
             },
             store,
         )
+    }
+
+    async fn empty_tree() -> OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher> {
+        let node_store = create_node_store(0);
+        let mut tree = create_tree(node_store);
+        tree.init().await.unwrap();
+        tree
     }
 
     #[tokio::test]
@@ -383,37 +488,50 @@ mod tests {
 
     #[tokio::test]
     async fn get_flow_empty_test() {
-        let node_store = create_node_store(0);
-        let mut tree = create_tree(node_store);
-        tree.init().await.unwrap();
+        // Get from empty tree return None
+        let tree = empty_tree().await;
 
         let cmd = Cmd::new(TestCallback::empty());
         let res1 = tree.get(Cmd::new(TestCallback::empty())).await;
         assert_eq!(res1.unwrap(), None);
 
-        let cmd = Cmd::new(TestCallback::new(vec![1], vec![]));
+        let cmd = Cmd::new(TestCallback::empty());
         let res2 = tree.get(cmd).await;
         assert_eq!(res2.unwrap(), None);
     }
 
+    #[tokio::test]
+    async fn put_one_and_get_it_back_test() {
+        // Put item and get it back
+        let tree = empty_tree().await;
+
+        let cmd1 = Cmd::new(TestCallback::empty());
+        let res1 = tree.get(cmd1).await.unwrap();
+        assert_eq!(res1, None);
+
+        // let cmd2 = Cmd::new(TestCallback::empty());
+        // let res2 = tree.put(cmd2).await.unwrap();
+
+        // todo finish
+    }
+
     // todo more tests for GetFlow
 
-    #[tokio::test]
-    async fn load_save_node_test() {
-        let node_store = create_node_store(0);
-        let mut tree = create_tree(node_store);
-
-        let leaf1 = tree.read_node(1).await;
-        assert_eq!(None, leaf1.unwrap());
-
-        let put = tree.write_node(1, Node::empty_leaf()).await;
-        assert_eq!((), put.unwrap());
-
-        let leaf2 = tree.read_node(1).await;
-
-        assert_eq!(Some(Node::empty_leaf()), leaf2.unwrap())
-
-        // todo
-        // tree.get()
-    }
+    // #[tokio::test]
+    // async fn load_save_node_test() {
+    //     let node_store = create_node_store(0);
+    //     let mut tree = create_tree(node_store);
+    //
+    //     let leaf1 = tree.read_node(1).await;
+    //     assert_eq!(leaf1.unwrap(), None);
+    //
+    //     let put = tree.write_node(1, Node::empty_leaf()).await;
+    //     assert_eq!(put.unwrap(), ());
+    //
+    //     let leaf2 = tree.read_node(1).await;
+    //     assert_eq!(leaf2.unwrap(), Some(Node::empty_leaf()))
+    //
+    //     // todo
+    //     // tree.get()
+    // }
 }

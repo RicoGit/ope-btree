@@ -76,12 +76,12 @@ pub trait SearchCallback: BtreeCallback {
 /// value to the OpeBTree.
 pub struct ClientPutDetails {
     /// The key that will be placed to the BTree
-    key: Bytes,
+    pub key: Bytes,
     /// Hash of value that will be placed to the BTree
-    val_hash: Bytes,
+    pub val_hash: Bytes,
     /// A result of searching client's key among keys of the leaf in which the
     /// new key and value will be inserted. Contains an index for inserting.
-    search_result: SearchResult,
+    pub search_result: SearchResult,
 }
 
 /// Wrapper for all callbacks needed for BTree's ''Put'' operation.
