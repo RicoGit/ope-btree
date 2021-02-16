@@ -58,7 +58,7 @@ where
     }
 
     fn next_id(&mut self) -> Id {
-        self.id_generator.gen()
+        self.id_generator.next()
     }
 
     pub async fn get(&self, node_id: Id) -> Result<Option<Node>> {

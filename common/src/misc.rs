@@ -76,9 +76,12 @@ mod test {
     use bytes::BytesMut;
 
     #[test]
-    fn key_valref_hash_converters() {
+    fn to_bytes_test() {
         let origin = BytesMut::from("hash");
         let hash = Hash(origin.clone());
-        assert_eq!(origin.clone(), hash.bytes());
+        assert_eq!(origin.clone().freeze(), hash.bytes());
+
+        let hash = Hash(origin.clone());
+        assert_eq!(origin.clone(), hash.bytes_mut());
     }
 }
