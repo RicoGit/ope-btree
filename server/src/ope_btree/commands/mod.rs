@@ -32,3 +32,104 @@ impl<Cb> Cmd<Cb> {
         Cmd { cb }
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use futures::FutureExt;
+    use protocol::{PutCallbacks, RpcFuture};
+    use std::cell::Cell;
+
+    /// Stub Callback for testing
+    pub struct TestCallback {
+        next_child_idx_vec: Cell<Vec<usize>>,
+        submit_leaf_vec: Cell<Vec<SearchResult>>,
+        put_details_vec: Cell<Vec<SearchResult>>,
+        verify_changes_vec: Cell<Vec<Bytes>>,
+    }
+
+    impl TestCallback {
+        pub fn new(
+            next_child_idx_vec: Vec<usize>,
+            submit_leaf_vec: Vec<SearchResult>,
+            put_details_vec: Vec<SearchResult>,
+            verify_changes_vec: Vec<Bytes>,
+        ) -> Self {
+            TestCallback {
+                next_child_idx_vec: Cell::new(next_child_idx_vec),
+                submit_leaf_vec: Cell::new(submit_leaf_vec),
+                put_details_vec: Cell::new(put_details_vec),
+                verify_changes_vec: Cell::new(verify_changes_vec),
+            }
+        }
+
+        pub fn empty() -> Self {
+            TestCallback::new(vec![], vec![], vec![] , vec![])
+        }
+    }
+
+    impl BtreeCallback for TestCallback {
+        fn next_child_idx<'f>(
+            &self,
+            _keys: Vec<Bytes>,
+            _children_hashes: Vec<Bytes>,
+        ) -> RpcFuture<'f, usize> {
+            let mut vec = self.next_child_idx_vec.take();
+            let res = vec
+                .pop()
+                .expect("TestCallback.next_child_idx: index should be appeared");
+            self.next_child_idx_vec.replace(vec);
+            async move { Ok(res) }.boxed()
+        }
+    }
+
+    impl SearchCallback for TestCallback {
+        fn submit_leaf<'f>(
+            &self,
+            _keys: Vec<Bytes>,
+            _values_hashes: Vec<Bytes>,
+        ) -> RpcFuture<'f, SearchResult> {
+            let mut vec = self.submit_leaf_vec.take();
+            let res = vec
+                .pop()
+                .expect("TestCallback.submit_leaf: SearchResult should be appeared");
+            self.submit_leaf_vec.replace(vec);
+            async move { Ok(res) }.boxed()
+        }
+    }
+
+    impl PutCallbacks for TestCallback {
+        fn put_details<'f>(
+            &self,
+            keys: Vec<Bytes>,
+            values_hashes: Vec<Bytes>,
+        ) -> RpcFuture<'f, ClientPutDetails> {
+            let mut vec = self.put_details_vec.take();
+            let res = vec
+                .pop()
+                .expect("TestCallback.put_details: SearchResult should be appeared");
+            self.put_details_vec.replace(vec);
+            async move { Ok(res) }.boxed()
+        }
+
+        fn verify_changes<'f>(
+            &self,
+            server_merkle_root: Bytes,
+            was_splitting: bool,
+        ) -> RpcFuture<'f, Bytes> {
+            let mut vec = self.verify_changes_vec.take();
+            let res = vec
+                .pop()
+                .expect("TestCallback.verify_changes: client signed root should be appeared");
+            self.verify_changes_vec.replace(vec);
+            async move { Ok(res) }.boxed()
+        }
+
+        fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
+            async {
+                log::info!("TestCallback.changes_stored: All changes stored");
+            }
+        }
+    }
+}

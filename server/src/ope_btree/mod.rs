@@ -5,7 +5,7 @@ use async_recursion::async_recursion;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use futures::future::BoxFuture;
@@ -348,11 +348,11 @@ impl PutTask {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ope_btree::commands::search_cmd::tests::*;
     use crate::ope_btree::commands::Cmd;
     use crate::ope_btree::BTreeErr::IllegalStateErr;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
     use protocol::SearchResult;
+    use crate::ope_btree::commands::tests::TestCallback;
 
     fn create_node_store(
         idx: NodeId,
