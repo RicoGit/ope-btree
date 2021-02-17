@@ -344,7 +344,7 @@ where
 
     /// Generates new value reference
     async fn next_value_ref(&self) -> ValueRef {
-        todo!()
+        ValueRef("val".into())
     }
 
     /// Generates new btree node reference
@@ -450,7 +450,7 @@ mod tests {
     use crate::ope_btree::BTreeErr::IllegalStateErr;
     use common::noop_hasher::NoOpHasher;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
-    use protocol::SearchResult;
+    use protocol::{ClientPutDetails, SearchResult};
 
     fn create_node_store(
         idx: NodeId,
@@ -464,7 +464,7 @@ mod tests {
     ) -> OpeBTree<Store, NoOpHasher> {
         OpeBTree::new(
             OpeBTreeConf {
-                arity: 8,
+                arity: 4,
                 alpha: 0.25_f32,
             },
             store,
@@ -501,37 +501,56 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn put_one_and_get_it_back_test() {
-        // Put item and get it back
-        let tree = empty_tree().await;
+    async fn put_one_and_get_into_empty_tree_test() {
+        // Put item into empty tree and get it back
+        let mut tree = empty_tree().await;
 
+        // get from empty tree
         let cmd1 = Cmd::new(TestCallback::empty());
         let res1 = tree.get(cmd1).await.unwrap();
         assert_eq!(res1, None);
 
-        // let cmd2 = Cmd::new(TestCallback::empty());
-        // let res2 = tree.put(cmd2).await.unwrap();
+        // put to empty tree
+        let put_details_vec = vec![ClientPutDetails::new(
+            "Key".into(),
+            "ValHash".into(),
+            SearchResult::Err(0),
+        )];
+        let verify_changes_vec = vec!["SignedRoot".into()];
+        let cmd2 = Cmd::new(TestCallback::new(
+            vec![],
+            vec![],
+            put_details_vec,
+            verify_changes_vec,
+        ));
+        let res2 = tree.put(cmd2).await.unwrap();
+        assert!(res2.is_some());
 
-        // todo finish
+        // get value stored before
+        let submit_leaf_vec = vec![SearchResult::Ok(0)];
+        let cmd3 = Cmd::new(TestCallback::new(vec![], submit_leaf_vec, vec![], vec![]));
+        let res3 = tree.get(cmd3).await.unwrap();
+        assert_eq!(res3, res2); // val_ref is the same as we got from put
+
+        // get value non-stored before
+        let cmd4 = Cmd::new(TestCallback::for_get(vec![], vec![SearchResult::Err(1)]));
+        let res4 = tree.get(cmd4).await.unwrap();
+        assert_eq!(res4, None);
     }
 
-    // todo more tests for GetFlow
+    #[tokio::test]
+    async fn load_save_node_test() {
+        // Test private methods 'read_node' and 'write_node'
+        let node_store = create_node_store(0);
+        let mut tree = create_tree(node_store);
 
-    // #[tokio::test]
-    // async fn load_save_node_test() {
-    //     let node_store = create_node_store(0);
-    //     let mut tree = create_tree(node_store);
-    //
-    //     let leaf1 = tree.read_node(1).await;
-    //     assert_eq!(leaf1.unwrap(), None);
-    //
-    //     let put = tree.write_node(1, Node::empty_leaf()).await;
-    //     assert_eq!(put.unwrap(), ());
-    //
-    //     let leaf2 = tree.read_node(1).await;
-    //     assert_eq!(leaf2.unwrap(), Some(Node::empty_leaf()))
-    //
-    //     // todo
-    //     // tree.get()
-    // }
+        let leaf1 = tree.read_node(1).await;
+        assert_eq!(leaf1.unwrap(), None);
+
+        let put = tree.write_node(1, Node::empty_leaf()).await;
+        assert_eq!(put.unwrap(), ());
+
+        let leaf2 = tree.read_node(1).await;
+        assert_eq!(leaf2.unwrap(), Some(Node::empty_leaf()))
+    }
 }

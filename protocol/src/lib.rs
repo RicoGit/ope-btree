@@ -84,6 +84,16 @@ pub struct ClientPutDetails {
     pub search_result: SearchResult,
 }
 
+impl ClientPutDetails {
+    pub fn new(key: Bytes, val_hash: Bytes, search_result: SearchResult) -> Self {
+        ClientPutDetails {
+            key,
+            val_hash,
+            search_result,
+        }
+    }
+}
+
 /// Wrapper for all callbacks needed for BTree's ''Put'' operation.
 /// Each callback corresponds to operation needed btree for traversing
 /// and inserting value.

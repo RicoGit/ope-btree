@@ -67,6 +67,10 @@ pub mod tests {
         pub fn empty() -> Self {
             TestCallback::new(vec![], vec![], vec![], vec![])
         }
+
+        pub fn for_get(next_child_idx_vec: Vec<usize>, submit_leaf_vec: Vec<SearchResult>) -> Self {
+            TestCallback::new(next_child_idx_vec, submit_leaf_vec, vec![], vec![])
+        }
     }
 
     impl BtreeCallback for TestCallback {
