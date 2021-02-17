@@ -82,6 +82,11 @@ impl AsString for Hash {
     }
 }
 
+/// Replaces ''item'' in ''vector'' for specified ''idx''
+pub fn replace<T>(vector: &mut Vec<T>, item: T, idx: usize) {
+    let _ = std::mem::replace(&mut vector[idx], item.into());
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -95,5 +100,24 @@ mod test {
 
         let hash = Hash(origin.clone());
         assert_eq!(origin.clone(), hash.bytes_mut());
+    }
+
+    #[test]
+    fn replace_test() {
+        let item = Bytes::from("###");
+        let item1 = Bytes::from("item1");
+        let item2 = Bytes::from("item2");
+        let item3 = Bytes::from("item3");
+
+        let mut vec = vec![item1.clone(), item2.clone(), item3.clone()];
+
+        replace(&mut vec, item.clone(), 0);
+        assert_eq!(vec, vec![item.clone(), item2.clone(), item3.clone()]);
+
+        replace(&mut vec, item.clone(), 1);
+        assert_eq!(vec, vec![item.clone(), item.clone(), item3.clone()]);
+
+        replace(&mut vec, item.clone(), 2);
+        assert_eq!(vec, vec![item.clone(), item.clone(), item.clone()]);
     }
 }

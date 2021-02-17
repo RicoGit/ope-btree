@@ -21,6 +21,18 @@ pub const STR_END_SIGN: u8 = 0_u8;
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
 pub struct Key(pub BytesMut);
 
+impl Key {
+    /// Returns empty Key.
+    pub fn empty() -> Self {
+        Key(BytesMut::new())
+    }
+
+    /// Turns str to Key (for test purpose)
+    pub fn from_str(str: &str) -> Key {
+        Key(BytesMut::from(str))
+    }
+}
+
 /// A hash of anything.
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
 pub struct Hash(pub BytesMut);

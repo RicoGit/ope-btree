@@ -74,6 +74,7 @@ pub trait SearchCallback: BtreeCallback {
 
 /// A structure for holding all client details needed for inserting a key and a
 /// value to the OpeBTree.
+#[derive(Debug, Clone)]
 pub struct ClientPutDetails {
     /// The key that will be placed to the BTree
     pub key: Bytes,

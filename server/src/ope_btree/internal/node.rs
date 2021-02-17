@@ -1,12 +1,16 @@
 //! Implementation of Btree node.
 
-use crate::ope_btree::ValueRef;
+use std::ops::Deref;
+use std::ptr::replace;
+
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+
 use common::merkle::{MerkleError, NodeProof};
 use common::misc::ToBytes;
-use common::{Digest, Hash, Key};
-use serde::{Deserialize, Serialize};
-use std::ops::Deref;
+use common::{misc, Digest, Hash, Key};
+
+use crate::ope_btree::ValueRef;
 
 type NodeRef = usize;
 
@@ -81,8 +85,7 @@ impl LeafNode {
         let values_refs = vec![value_ref];
         let values_hashes = vec![value_hash];
         let kv_hashes = LeafNode::build_checksum::<D>(keys.clone(), values_hashes.clone());
-        let hash =
-            NodeProof::try_new(Hash::empty(), kv_hashes.clone(), None)?.calc_checksum::<D>(None);
+        let hash = LeafNode::leaf_hash::<D>(kv_hashes.clone());
         let leaf = LeafNode {
             keys,
             values_refs,
@@ -106,6 +109,66 @@ impl LeafNode {
                 key
             })
             .collect()
+    }
+
+    /// Calculates checksum of leaf by folding ''kv_hashes''
+    pub fn leaf_hash<D: Digest>(kv_hashes: Vec<Hash>) -> Hash {
+        NodeProof::try_new(Hash::empty(), kv_hashes, None)
+            .expect("leaf_hash: NodeProof should be build")
+            .calc_checksum::<D>(None)
+    }
+
+    /// Replace old key into Leaf with new one
+    pub fn update<D: Digest>(
+        mut self,
+        key: Key,
+        val_ref: ValueRef,
+        val_hash: Hash,
+        idx: usize,
+    ) -> LeafNode {
+        assert!(
+            idx != 0 || idx >= self.size,
+            format!(
+                "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
+                idx, self.size
+            )
+        );
+
+        misc::replace(&mut self.keys, key, idx);
+        misc::replace(&mut self.values_refs, val_ref, idx);
+        misc::replace(&mut self.values_hashes, val_hash, idx);
+
+        self.kv_hashes =
+            LeafNode::build_checksum::<D>(self.keys.clone(), self.values_hashes.clone());
+        self.hash = LeafNode::leaf_hash::<D>(self.kv_hashes.clone());
+        self
+    }
+
+    /// Insert new key into Leaf
+    pub fn insert<D: Digest>(
+        mut self,
+        key: Key,
+        val_ref: ValueRef,
+        val_hash: Hash,
+        idx: usize,
+    ) -> LeafNode {
+        assert!(
+            idx != 0 || idx >= self.size,
+            format!(
+                "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
+                idx, self.size
+            )
+        );
+
+        self.keys.insert(idx, key);
+        self.values_refs.insert(idx, val_ref);
+        self.values_hashes.insert(idx, val_hash);
+
+        self.kv_hashes =
+            LeafNode::build_checksum::<D>(self.keys.clone(), self.values_hashes.clone());
+        self.hash = LeafNode::leaf_hash::<D>(self.kv_hashes.clone());
+        self.size += 1;
+        self
     }
 }
 
@@ -217,15 +280,19 @@ impl<T: ToBytes + Clone> AsBytes for Vec<T> {
 
 #[cfg(test)]
 pub mod tests {
-    use super::Key;
-    use super::ValueRef;
+    use bytes::{Bytes, BytesMut};
+    use rmps::{Deserializer, Serializer};
+    use serde::{Deserialize, Serialize};
+
+    use common::Hash;
+
     use crate::ope_btree::internal::node::BranchNode;
     use crate::ope_btree::internal::node::LeafNode;
     use crate::ope_btree::internal::node::Node;
-    use bytes::{Bytes, BytesMut};
-    use common::Hash;
-    use rmps::{Deserializer, Serializer};
-    use serde::{Deserialize, Serialize};
+
+    use super::Key;
+    use super::ValueRef;
+    use common::noop_hasher::NoOpHasher;
 
     #[test]
     fn leaf_serde_test() {
@@ -247,17 +314,76 @@ pub mod tests {
         assert_eq!(branch, Deserialize::deserialize(&mut de).unwrap());
     }
 
+    #[test]
+    fn create_test() {
+        let k1 = Key::from_str("k1");
+        let r1 = ValueRef::from_str("r1");
+        let h1 = Hash::from_str("h1");
+        let leaf = LeafNode::create::<NoOpHasher>(k1.clone(), r1.clone(), h1.clone()).unwrap();
+        assert_eq!(leaf.keys, vec![k1]);
+        assert_eq!(leaf.values_refs, vec![r1]);
+        assert_eq!(leaf.values_hashes, vec![h1]);
+        assert_eq!(leaf.size, 1);
+        assert_eq!(leaf.kv_hashes, vec![Hash::from_str("k1h1")]);
+        assert_eq!(leaf.hash.to_string(), "Hash[6, [k1h1]]");
+    }
+
+    #[test]
+    fn update_test() {
+        let leaf = create_leaf();
+        let k = Key::from_str("k#");
+        let r = ValueRef::from_str("r#");
+        let h = Hash::from_str("h#");
+        let leaf = leaf.update::<NoOpHasher>(k.clone(), r.clone(), h.clone(), 1);
+
+        assert_eq!(leaf.keys, vec![Key::from_str("k1"), k]);
+        assert_eq!(leaf.values_refs, vec![ValueRef::from_str("r1"), r]);
+        assert_eq!(leaf.values_hashes, vec![Hash::from_str("h1"), h]);
+        assert_eq!(leaf.size, 2);
+        assert_eq!(
+            leaf.kv_hashes,
+            vec![Hash::from_str("k1h1"), Hash::from_str("k#h#")]
+        );
+        assert_eq!(leaf.hash.to_string(), "Hash[10, [k1h1k#h#]]");
+    }
+
+    #[test]
+    fn insert_test() {
+        let leaf = create_leaf();
+        let k = Key::from_str("k#");
+        let r = ValueRef::from_str("r#");
+        let h = Hash::from_str("h#");
+        let leaf = leaf.insert::<NoOpHasher>(k.clone(), r.clone(), h.clone(), 1);
+
+        assert_eq!(leaf.keys, vec![Key::from_str("k1"), k, Key::from_str("k2")]);
+        assert_eq!(
+            leaf.values_refs,
+            vec![ValueRef::from_str("r1"), r, ValueRef::from_str("r2")]
+        );
+        assert_eq!(
+            leaf.values_hashes,
+            vec![Hash::from_str("h1"), h, Hash::from_str("h2")]
+        );
+        assert_eq!(leaf.size, 3);
+        assert_eq!(
+            leaf.kv_hashes,
+            vec![
+                Hash::from_str("k1h1"),
+                Hash::from_str("k#h#"),
+                Hash::from_str("k2h2")
+            ]
+        );
+        assert_eq!(leaf.hash.to_string(), "Hash[14, [k1h1k#h#k2h2]]");
+    }
+
     pub fn create_leaf() -> LeafNode {
         LeafNode {
-            keys: vec![Key(BytesMut::from("key1")), Key(BytesMut::from("key2"))],
-            values_refs: vec![ValueRef(Bytes::from("ref1")), ValueRef(Bytes::from("ref2"))],
-            values_hashes: vec![Hash(BytesMut::from("hash1")), Hash(BytesMut::from("hash2"))],
-            kv_hashes: vec![
-                Hash(BytesMut::from("kv_hash1")),
-                Hash(BytesMut::from("kv_hash2")),
-            ],
+            keys: vec![Key::from_str("k1"), Key::from_str("k2")],
+            values_refs: vec![ValueRef::from_str("r1"), ValueRef::from_str("r2")],
+            values_hashes: vec![Hash::from_str("h1"), Hash::from_str("h2")],
+            kv_hashes: vec![Hash::from_str("k1v1"), Hash::from_str("k2v2")],
             size: 2,
-            hash: Hash(BytesMut::from("leaf_hash")),
+            hash: Hash(BytesMut::from("[k1v1k2v2]")),
             right_sibling: None,
         }
     }
