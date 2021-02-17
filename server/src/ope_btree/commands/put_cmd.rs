@@ -15,14 +15,9 @@ impl<Cb: PutCallbacks> Cmd<Cb> {
     /// * `leaf` - Values for calculating current node hash on the client side
     ///             and find an index to insert.
     pub async fn put_details(&self, leaf: LeafNode) -> Result<ClientPutDetails> {
-        let LeafNode {
-            keys,
-            values_hashes,
-            ..
-        } = leaf;
         let res = self
             .cb
-            .put_details(keys.into_bytes(), values_hashes.into_bytes())
+            .put_details(leaf.keys.into_bytes(), leaf.values_hashes.into_bytes())
             .await?;
         Ok(res)
     }

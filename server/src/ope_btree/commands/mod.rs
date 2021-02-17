@@ -39,14 +39,15 @@ pub mod tests {
     use bytes::Bytes;
     use futures::FutureExt;
     use protocol::{PutCallbacks, RpcFuture};
-    use std::cell::Cell;
+    use std::cell::RefCell;
 
     /// Stub Callback for testing
+    #[derive(Clone, Debug)]
     pub struct TestCallback {
-        next_child_idx_vec: Cell<Vec<usize>>,
-        submit_leaf_vec: Cell<Vec<SearchResult>>,
-        put_details_vec: Cell<Vec<ClientPutDetails>>,
-        verify_changes_vec: Cell<Vec<Bytes>>,
+        next_child_idx_vec: RefCell<Vec<usize>>,
+        submit_leaf_vec: RefCell<Vec<SearchResult>>,
+        put_details_vec: RefCell<Vec<ClientPutDetails>>,
+        verify_changes_vec: RefCell<Vec<Bytes>>,
     }
 
     impl TestCallback {
@@ -57,10 +58,10 @@ pub mod tests {
             verify_changes_vec: Vec<Bytes>,
         ) -> Self {
             TestCallback {
-                next_child_idx_vec: Cell::new(next_child_idx_vec),
-                submit_leaf_vec: Cell::new(submit_leaf_vec),
-                put_details_vec: Cell::new(put_details_vec),
-                verify_changes_vec: Cell::new(verify_changes_vec),
+                next_child_idx_vec: RefCell::new(next_child_idx_vec),
+                submit_leaf_vec: RefCell::new(submit_leaf_vec),
+                put_details_vec: RefCell::new(put_details_vec),
+                verify_changes_vec: RefCell::new(verify_changes_vec),
             }
         }
 

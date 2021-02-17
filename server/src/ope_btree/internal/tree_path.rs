@@ -30,14 +30,13 @@ impl<Id> TreePath<Id> {
     }
 
     /// Pushes new tree element to tail of sequence. Returns new version of [[TreePath]].
-    fn push(mut self, new_id: Id, new_tree: BranchNode, next_child_idx: usize) -> TreePath<Id> {
+    pub fn push(&mut self, new_id: Id, new_tree: BranchNode, next_child_idx: usize) {
         let elem = PathElem {
             branch_id: new_id,
             branch: new_tree,
             next_child_idx,
         };
         self.branches.push(elem);
-        self
     }
 }
 

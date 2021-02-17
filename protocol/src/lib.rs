@@ -93,6 +93,12 @@ impl ClientPutDetails {
             search_result,
         }
     }
+
+    /// Returns insertion point index
+    pub fn idx(&self) -> usize {
+        self.search_result
+            .unwrap_or_else(|_| self.search_result.unwrap_err())
+    }
 }
 
 /// Wrapper for all callbacks needed for BTree's ''Put'' operation.

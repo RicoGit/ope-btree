@@ -1,7 +1,7 @@
 //! BTree implementation.
 //! todo more documentation when btree will be ready
 
-use async_recursion::async_recursion;
+use std::convert::TryInto;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -15,19 +15,20 @@ use kvstore_binary::BinKVStore;
 use rmps::{Deserializer, Serializer};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use common::gen::{Generator, NumGen};
+use common::merkle::{MerkleError, MerklePath, NodeProof};
+use common::misc::ToBytes;
 use common::{Digest, Hash, Key};
+use protocol::{
+    BtreeCallback, ClientPutDetails, ProtocolError, PutCallbacks, SearchCallback, SearchResult,
+};
 
 use crate::ope_btree::commands::{Cmd, CmdError};
 use crate::ope_btree::internal::node::{BranchNode, LeafNode, Node, NodeWithId};
 use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
 use crate::ope_btree::internal::tree_path::TreePath;
-use common::merkle::{MerkleError, MerklePath, NodeProof};
-use common::misc::ToBytes;
-use protocol::{ClientPutDetails, ProtocolError, PutCallbacks, SearchCallback, SearchResult};
-use std::convert::TryInto;
 
 pub mod commands;
 pub mod internal;
@@ -130,9 +131,18 @@ where
     /// Btree configurations
     config: OpeBTreeConf,
     /// Generates ValueRef for BTree
-    val_ref_gen: Box<dyn Generator<Item = ValueRef>>,
+    val_ref_gen: Arc<Mutex<ValRefGen>>,
 
     phantom_data: PhantomData<D>,
+}
+
+struct FoundChild {
+    /// Node id for found child
+    child_id: NodeId,
+    // Found child node
+    child_node: Node,
+    /// Index sended by client
+    found_idx: usize,
 }
 
 /// Encapsulates all logic by traversing tree for Get operation.
@@ -171,8 +181,8 @@ where
                     Node::Leaf(leaf) => return self.get_for_leaf(leaf).await,
                     Node::Branch(branch) => {
                         log::debug!("GetFlow: Get for branch={:?}", &branch);
-                        let (_, child) = self.search_child(branch).await?;
-                        current_node = child;
+                        let res = self.search_child(branch).await?;
+                        current_node = res.child_node;
                     }
                 }
             }
@@ -201,17 +211,21 @@ where
     /// `branch` Branch node for searching
     ///
     /// Returns index of searched child and the child
-    async fn search_child(&self, branch: BranchNode) -> Result<(usize, Node)> {
+    async fn search_child(&self, branch: BranchNode) -> Result<FoundChild> {
         let found_idx = self.cmd.next_child_idx(branch.clone()).await?;
         let child_id = *branch.children_refs.get(found_idx).ok_or_else(|| {
             BTreeErr::node_not_found(found_idx, "search_child: Invalid node idx from client")
         })?;
 
-        let node = self.read_node(child_id).await?.ok_or_else(|| {
+        let child_node = self.read_node(child_id).await?.ok_or_else(|| {
             BTreeErr::node_not_found(found_idx, "search_child: Can't find in node storage")
         })?;
 
-        Ok((child_id, node))
+        Ok(FoundChild {
+            child_id,
+            child_node,
+            found_idx,
+        })
     }
 
     async fn read_node(&self, node_id: NodeId) -> Result<Option<Node>> {
@@ -231,19 +245,19 @@ where
 {
     cmd: Cmd<Cb>,
     node_store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>,
-    val_ref_gen: ValRefGen,
+    val_ref_gen: Arc<Mutex<ValRefGen>>,
     phantom_data: PhantomData<D>,
 }
 
 impl<Cb, Store, D: Digest> PutFlow<Cb, Store, D>
 where
-    Cb: PutCallbacks,
+    Cb: SearchCallback + PutCallbacks + Clone, // todo separate BTreeFlow for BTreeCallback
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
     fn new(
         cmd: Cmd<Cb>,
         node_store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>,
-        val_ref_gen: ValRefGen,
+        val_ref_gen: Arc<Mutex<ValRefGen>>,
     ) -> Self {
         PutFlow {
             cmd,
@@ -253,37 +267,64 @@ where
         }
     }
 
+    /// Finds and fetches next child, makes step down the tree and updates trail.
+    ///
+    /// `node_id` Id of walk-through branch node
+    /// `node`   Walk-through node
+    async fn put_for_node(self, node_id: NodeId, node: Node) -> Result<(PutTask, ValueRef)> {
+        let mut trail = Trail::empty();
+        let mut current_node_id = node_id;
+        let mut current_node = node;
+        let get_flow = GetFlow::new(self.cmd.clone(), self.node_store.clone());
+
+        loop {
+            match current_node {
+                Node::Leaf(leaf) => return self.put_for_leaf(node_id, leaf, trail).await,
+                Node::Branch(branch) => {
+                    log::debug!("PutFlow: Put for branch={:?}", &branch);
+
+                    let res = get_flow.search_child(branch.clone()).await?;
+                    trail.push(current_node_id, branch, res.found_idx);
+
+                    current_node_id = res.child_id;
+                    current_node = res.child_node;
+                }
+            }
+        }
+    }
+
     /// Puts new ''key'' and ''value'' to this leaf.
     /// Also makes all tree transformation (rebalancing, persisting to store).
     /// This is the terminal method.
-    async fn put_for_leaf(self, leaf_id: NodeId, leaf: LeafNode, trail: Trail) -> Result<ValueRef> {
+    /// Returns plan of updating Btree and value reference
+    async fn put_for_leaf(
+        self,
+        leaf_id: NodeId,
+        leaf: LeafNode,
+        trail: Trail,
+    ) -> Result<(PutTask, ValueRef)> {
         log::debug!("Put to leaf={:?}, id={:?}", &leaf, leaf_id);
 
-        let put_details = self.cmd.put_details(leaf).await?;
+        let put_details = self.cmd.put_details(leaf.clone()).await?;
+        let (updated_leaf, val_ref) = self.update_leaf(leaf, put_details.clone()).await?;
 
-        // cmd.putDetails(Some(leaf)).flatMap { putDetails: BTreePutDetails ⇒
-        //     val (updatedLeaf, valueRef) = updateLeaf(putDetails, leaf)
-        //     // makes all transformations over the copy of tree
-        //     val (newStateProof, putTask) =
-        //         logicalPut(leafId, updatedLeaf, putDetails.clientPutDetails.searchResult.insertionPoint, trail)
-        //     // after all the logical operations, we need to send the merkle path to the client for verification
-        //     cmd
-        //         .verifyChanges(newStateProof, putTask.wasSplitting)
-        //         .flatMap { _ ⇒
-        //         // persist all changes
-        //         commitNewState(putTask)
-        //     }
-        //         .map(_ ⇒ valueRef)
-        // }
+        // makes all transformations over the copy of tree
+        let (new_state_proof, put_task) =
+            self.logical_put(leaf_id, updated_leaf, put_details.idx().clone(), trail);
 
-        todo!()
+        // after all the logical operations, we need to send the merkle path to the client for verification
+        self.cmd
+            .verify_changes::<D>(new_state_proof, put_task.was_splitting)
+            .await?;
+
+        Ok((put_task, val_ref))
     }
 
     /// Puts new ''key'' and ''value'' to this leaf.
     ///  * if search key was found - rewrites key and value
     ///  * if key wasn't found - inserts new key and value
     async fn update_leaf(
-        mut self,
+        &self,
         leaf: LeafNode,
         put_detail: ClientPutDetails,
     ) -> Result<(LeafNode, ValueRef)> {
@@ -318,7 +359,7 @@ where
             }
             SearchResult::Err(idx_of_insert) => {
                 // key wasn't found in this Leaf, insert new value to the leaf
-                let new_val_ref = self.val_ref_gen.next();
+                let new_val_ref = self.val_ref_gen.lock().await.next();
                 let updated_leaf = leaf.insert::<D>(
                     key.into(),
                     new_val_ref.clone(),
@@ -330,6 +371,37 @@ where
         };
         Ok(res)
     }
+
+    /// This method does all mutation operations over the tree in memory without changing tree state
+    /// and composes merkle path for new tree state. It inserts new value to leaf,
+    /// and does tree rebalancing if it needed.
+    /// All changes makeover copies of the visited nodes and actually don't change the tree.
+    ///
+    /// `leaf_id` Id of leaf that was updated
+    /// `new_leaf` Leaf that was updated with new key and value
+    /// `found_val_idx` Insertion index of a new value
+    /// `trail` The path traversed from the root to a leaf with all visited tree nodes.
+    ///
+    /// Returns tuple with [`MerklePath`] for tree after updating and [`PutTask`] for persisting changes
+    ///
+    /// [`MerklePath`]: common/merkle/struct.MerklePath.html
+    /// [`PutTask`]: struct.PutTask.html
+    fn logical_put(
+        &self,
+        leaf_id: NodeId,
+        new_leaf: LeafNode,
+        found_val_idx: usize,
+        trail: Trail,
+    ) -> (MerklePath, PutTask) {
+        log::debug!(
+            "Logical put for leaf_id={}, leaf={:?}, trail={:?}",
+            leaf_id,
+            new_leaf,
+            trail
+        );
+
+        todo!()
+    }
 }
 
 impl<Store, D: Digest> OpeBTree<Store, D>
@@ -339,7 +411,7 @@ where
     pub fn new(
         config: OpeBTreeConf,
         node_store: BinaryNodeStore<NodeId, Node, Store, NumGen>,
-        val_ref_gen: impl Generator<Item = ValueRef> + 'static,
+        val_ref_gen: ValRefGen,
     ) -> Self {
         let node_store = Arc::new(RwLock::new(node_store));
         let depth = AtomicUsize::new(0);
@@ -347,7 +419,7 @@ where
             config,
             depth,
             node_store,
-            val_ref_gen: Box::new(val_ref_gen),
+            val_ref_gen: Arc::new(Mutex::new(val_ref_gen)),
             phantom_data: PhantomData::default(),
         }
     }
@@ -391,9 +463,9 @@ where
     // Put
     //
 
-    pub async fn put<Cb>(&mut self, cmd: Cmd<Cb>) -> Result<Option<ValueRef>>
+    pub async fn put<Cb>(&mut self, cmd: Cmd<Cb>) -> Result<ValueRef>
     where
-        Cb: PutCallbacks,
+        Cb: PutCallbacks + SearchCallback + Clone,
     {
         log::debug!("Put starts");
 
@@ -404,7 +476,7 @@ where
             log::debug!("Root node is empty, put in Root node");
             // send to client empty details, client answers with put details
             let put_details = cmd.cb.put_details(vec![], vec![]).await?;
-            let value_ref = self.next_value_ref();
+            let value_ref = self.val_ref_gen.lock().await.next();
             let new_leaf = LeafNode::create::<D>(
                 put_details.key.into(),
                 value_ref.clone(),
@@ -424,16 +496,16 @@ where
                 false,
             );
             self.commit_new_state(task).await?;
-            Ok(Some(value_ref))
+            Ok(value_ref)
         } else {
-            // todo finish
-            Ok(None)
-        }
-    }
+            let flow =
+                PutFlow::<_, _, D>::new(cmd, self.node_store.clone(), self.val_ref_gen.clone());
+            let (put_task, value_ref) = flow.put_for_node(ROOT_ID, root).await?;
 
-    /// Generates new value reference
-    fn next_value_ref(&mut self) -> ValueRef {
-        self.val_ref_gen.next()
+            // persists changes
+            self.commit_new_state(put_task).await?;
+            Ok(value_ref)
+        }
     }
 
     /// Generates new btree node reference
@@ -558,13 +630,16 @@ impl PutTask {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use kvstore_inmemory::hashmap_store::HashMapKVStore;
+
+    use common::noop_hasher::NoOpHasher;
+    use protocol::{ClientPutDetails, SearchResult};
+
     use crate::ope_btree::commands::tests::TestCallback;
     use crate::ope_btree::commands::Cmd;
     use crate::ope_btree::BTreeErr::IllegalStateErr;
-    use common::noop_hasher::NoOpHasher;
-    use kvstore_inmemory::hashmap_store::HashMapKVStore;
-    use protocol::{ClientPutDetails, SearchResult};
+
+    use super::*;
 
     fn create_node_store(
         idx: NodeId,
@@ -639,13 +714,12 @@ mod tests {
             verify_changes_vec,
         ));
         let res2 = tree.put(cmd2).await.unwrap();
-        assert!(res2.is_some());
 
         // get value stored before
         let submit_leaf_vec = vec![SearchResult::Ok(0)];
         let cmd3 = Cmd::new(TestCallback::new(vec![], submit_leaf_vec, vec![], vec![]));
         let res3 = tree.get(cmd3).await.unwrap();
-        assert_eq!(res3, res2); // val_ref is the same as we got from put
+        assert_eq!(res3, Some(res2)); // val_ref is the same as we got from put
 
         // get value non-stored before
         let cmd4 = Cmd::new(TestCallback::for_get(vec![], vec![SearchResult::Err(1)]));
