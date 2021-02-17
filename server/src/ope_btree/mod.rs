@@ -23,6 +23,7 @@ use common::{Digest, Hash, Key};
 use crate::ope_btree::commands::{Cmd, CmdError};
 use crate::ope_btree::internal::node::{BranchNode, LeafNode, Node, NodeWithId};
 use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
+use crate::ope_btree::internal::tree_path::TreePath;
 use common::merkle::{MerkleError, MerklePath, NodeProof};
 use common::misc::ToBytes;
 use protocol::{ProtocolError, PutCallbacks, SearchCallback};
@@ -79,6 +80,8 @@ impl BTreeErr {
 
 /// Tree root id is constant, it always points to root node in node_store.
 static ROOT_ID: usize = 0;
+
+type Trail = TreePath<NodeId>;
 
 pub type NodeId = usize;
 
@@ -244,6 +247,13 @@ where
         }
     }
 
+    /// Puts new ''key'' and ''value'' to this leaf.
+    /// Also makes all tree transformation (rebalancing, persisting to store).
+    /// This is the terminal method.
+    async fn put_for_leaf(self, leaf_id: NodeId, leaf: LeafNode, trail: Trail) -> Result<ValueRef> {
+        todo!()
+    }
+
     async fn read_node(&self, node_id: NodeId) -> Result<Option<Node>> {
         log::debug!("GetFlow: Read node: id={:?}", node_id);
         let lock = self.node_store.read().await;
@@ -346,7 +356,7 @@ where
             self.commit_new_state(task).await?;
             Ok(Some(value_ref))
         } else {
-            // todo finish and create valRefProvider !!!
+            // todo finish
             Ok(None)
         }
     }
