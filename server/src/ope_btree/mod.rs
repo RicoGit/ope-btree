@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use common::gen::NumGen;
+use common::gen::{Generator, NumGen};
 use common::{Digest, Hash, Key};
 
 use crate::ope_btree::commands::{Cmd, CmdError};
@@ -26,6 +26,7 @@ use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
 use common::merkle::{MerkleError, MerklePath, NodeProof};
 use common::misc::ToBytes;
 use protocol::{ProtocolError, PutCallbacks, SearchCallback};
+use std::convert::TryInto;
 
 pub mod commands;
 pub mod internal;
@@ -108,21 +109,27 @@ pub struct OpeBTreeConf {
 ///
 ///  Note that the tree provides only algorithms (i.e., functions) to search,
 /// insert and delete elements. Tree nodes are actually stored externally using
-/// the [`NodeStore`] to make the tree maximally pluggable and seamlessly switch
+/// the [`BinaryNodeStore`] to make the tree maximally pluggable and seamlessly switch
 /// between in memory, on disk, or maybe, over network storages. Key comparison
-/// operations in the tree are also pluggable and are provided by the [`BTreeCommand`]
+/// operations in the tree are also pluggable and are provided by the [`Cmd`]
 /// implementations, which helps to impose an order over for example encrypted nodes data.
 ///
-/// [`NodeStore`]: ../node_store/trait.NodeStore.html
-/// [`BTreeCommand`]: ../command/trait.BTreeCommand.html
+/// [`BinaryNodeStore`]: internal/node_store/struct.BinaryNodeStore.html
+/// [`Cmd`]: commands/struct.Cmd.html
 pub struct OpeBTree<Store, D>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
+    /// Store that keeping BTree nodes
     node_store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>,
+    /// Dept of Btree
     depth: AtomicUsize,
+    /// Btree configurations
     config: OpeBTreeConf,
-    phantom_data: PhantomData<D>, // todo should contain valRefProvider: () ⇒ ValueRef
+    /// Generates ValueRef for BTree
+    val_ref_gen: Box<dyn Generator<Item = ValueRef>>,
+
+    phantom_data: PhantomData<D>,
 }
 
 /// Encapsulates all logic by traversing tree for Get operation.
@@ -252,6 +259,7 @@ where
     pub fn new(
         config: OpeBTreeConf,
         node_store: BinaryNodeStore<NodeId, Node, Store, NumGen>,
+        val_ref_gen: impl Generator<Item = ValueRef> + 'static,
     ) -> Self {
         let node_store = Arc::new(RwLock::new(node_store));
         let depth = AtomicUsize::new(0);
@@ -259,6 +267,7 @@ where
             config,
             depth,
             node_store,
+            val_ref_gen: Box::new(val_ref_gen),
             phantom_data: PhantomData::default(),
         }
     }
@@ -343,8 +352,8 @@ where
     }
 
     /// Generates new value reference
-    async fn next_value_ref(&self) -> ValueRef {
-        ValueRef("val".into())
+    async fn next_value_ref(&mut self) -> ValueRef {
+        self.val_ref_gen.next()
     }
 
     /// Generates new btree node reference
@@ -404,6 +413,18 @@ pub struct ValueRef(pub Bytes);
 impl From<ValueRef> for Bytes {
     fn from(val: ValueRef) -> Self {
         val.0
+    }
+}
+
+/// Generates value references
+pub struct ValRefGen(pub usize);
+
+impl Generator for ValRefGen {
+    type Item = ValueRef;
+
+    fn next(&mut self) -> Self::Item {
+        self.0 += 1;
+        ValueRef(Bytes::copy_from_slice(&self.0.to_be_bytes()[..]))
     }
 }
 
@@ -468,6 +489,7 @@ mod tests {
                 alpha: 0.25_f32,
             },
             store,
+            ValRefGen(0),
         )
     }
 

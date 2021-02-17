@@ -91,7 +91,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ope_btree::OpeBTreeConf;
+    use crate::ope_btree::{OpeBTreeConf, ValRefGen};
     use common::gen::NumGen;
     use common::noop_hasher::NoOpHasher;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
@@ -126,6 +126,7 @@ mod tests {
                 alpha: 0.25_f32,
             },
             node_store,
+            ValRefGen(0),
         )
     }
 
