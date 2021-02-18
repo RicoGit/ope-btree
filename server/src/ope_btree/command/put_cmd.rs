@@ -1,4 +1,4 @@
-use crate::ope_btree::commands::{Cmd, Result};
+use crate::ope_btree::command::{Cmd, Result};
 use crate::ope_btree::internal::node::{AsBytes, LeafNode};
 use common::merkle::MerklePath;
 use common::misc::ToBytes;
@@ -6,7 +6,6 @@ use common::Digest;
 use protocol::{ClientPutDetails, PutCallbacks};
 
 /// Command for inserting key and value to the OpeBTree.
-
 impl<Cb: PutCallbacks> Cmd<Cb> {
     /// Returns all details needed for inserting a key-value to the OpeBTree.
     ///

@@ -1,7 +1,7 @@
 //! Server side encrypted (OPE) Key-Value database. Uses Ope-Btree as index and KVStore
 //! as backend for persisting data.
 
-use crate::ope_btree::commands::Cmd;
+use crate::ope_btree::command::Cmd;
 use crate::ope_btree::internal::node::Node;
 use crate::ope_btree::internal::node_store::BinaryNodeStore;
 use crate::ope_btree::{BTreeErr, OpeBTree, ValueRef};
