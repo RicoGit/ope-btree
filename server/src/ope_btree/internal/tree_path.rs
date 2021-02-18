@@ -1,4 +1,6 @@
 use crate::ope_btree::internal::node::BranchNode;
+use crate::ope_btree::NodeId;
+use common::{Digest, Hash};
 
 /// Path traversed from the root to a leaf (leaf is excluded). Contains all the information you need
 /// to climb up the tree.
@@ -49,4 +51,12 @@ pub struct PathElem<Id> {
     pub branch: BranchNode,
     /// Next child position index.
     pub next_child_idx: usize,
+}
+
+impl<Id> PathElem<Id> {
+    /// Updates children's checksum into parent node
+    pub fn updated_after_child_changing<D: Digest>(&mut self, child_hash: Hash) {
+        self.branch
+            .update_child_checksum::<D>(child_hash, self.next_child_idx);
+    }
 }

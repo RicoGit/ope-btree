@@ -1,7 +1,8 @@
-use crate::Hash;
+use crate::{Hash, Key};
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
 
+use crate::misc::ToBytes;
 use thiserror::Error;
 
 /// Merkle errors
@@ -48,26 +49,32 @@ pub struct NodeProof {
 impl NodeProof {
     /// Validates params and create `NodeProof`.
     /// substitution_idx=None is special values that skip first assert
-    pub fn try_new(
+    pub fn new(
         state_hash: Hash,
         children_hashes: Vec<Hash>,
         substitution_idx: Option<usize>,
-    ) -> Result<Self> {
-        if substitution_idx.is_some() && substitution_idx.unwrap() >= children_hashes.len() {
-            return Err(MerkleError::IndexErr {
-                msg: format!(
-                    "Substitution index have to be less than number of children hashes {}, but actually it is {:?}",
-                    children_hashes.len(),
-                    substitution_idx
-                ),
-            });
-        }
+    ) -> Self {
+        assert!(substitution_idx.is_none() || substitution_idx.unwrap() < children_hashes.len(), format!(
+            "Substitution index have to be less than number of children hashes {}, but actually it is {:?}",
+            children_hashes.len(),
+            substitution_idx
+        ));
 
-        Ok(NodeProof {
+        NodeProof {
             state_hash,
             children_hashes,
             substitution_idx,
-        })
+        }
+    }
+
+    pub fn new_proof<D: Digest>(
+        keys: Vec<Key>,
+        children_hashes: Vec<Hash>,
+        substitution_idx: Option<usize>,
+    ) -> Self {
+        let mut hash = Hash::empty();
+        hash.concat_all(keys.into_iter().map(|key| Hash::build::<D, _>(key.bytes())));
+        NodeProof::new(hash, children_hashes, substitution_idx)
     }
 
     /// Calculates a checksum (hash) for the current node proof and the substituted value.
@@ -106,7 +113,7 @@ impl NodeProof {
             }
         };
 
-        // todo I'm not sure, check this invariant
+        // todo I'm not sure, @check this invariant
         assert!(!state.is_empty(), "Empty NodeProof doesn't make any sense");
 
         Hash::build::<D, _>(state)
@@ -164,22 +171,22 @@ mod tests {
     use sha3::Sha3_256;
 
     #[test]
+    #[should_panic]
     fn node_proof_new_err_test() {
         // create invalid NodeProof
-        let proof = NodeProof::try_new(Hash::empty(), Vec::new(), Some(10));
-        assert!(proof.is_err())
+        NodeProof::new(Hash::empty(), Vec::new(), Some(10));
     }
 
     #[test]
     fn node_proof_new_ok_test() {
         // create valid NodeProof
-        let proof = NodeProof::try_new(Hash::empty(), vec![Hash::empty()], Some(0));
+        let proof = NodeProof::new(Hash::empty(), vec![Hash::empty()], Some(0));
         let expected = NodeProof {
             state_hash: Hash::empty(),
             children_hashes: vec![Hash::empty()],
             substitution_idx: Some(0),
         };
-        assert_eq!(expected, proof.unwrap())
+        assert_eq!(expected, proof)
     }
 
     #[test]

@@ -228,8 +228,7 @@ where
             )?;
 
             // send the merkle path to the client for verification
-            let leaf_proof =
-                NodeProof::try_new(Hash::empty(), new_leaf.kv_hashes.clone(), Some(0))?;
+            let leaf_proof = NodeProof::new(Hash::empty(), new_leaf.kv_hashes.clone(), Some(0));
             let merkle_root = MerklePath::new(leaf_proof).calc_merkle_root::<D>(None);
             let _signed_root = cmd.cb.verify_changes(merkle_root.bytes(), false).await?;
 

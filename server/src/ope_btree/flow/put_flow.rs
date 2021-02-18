@@ -205,11 +205,37 @@ where
     ///  * splits branch into two, adds left branch to parent as a new child and updates right branch checksum into parent node.
     ///  * if parent isn't exist create new parent with 2 new children.
     ///  * put all updated and new nodes into ''nodesToSave'' into [[PutTask]]
-    fn create_tree_path_ctx(&self, ctx: PutCtx, path_elem: PathElem<NodeId>) -> PutCtx {
-        // let func = ctx.update_parent_fn.as_ref();
-        // let PathElem { branch_id, branch, next_child_idx } = func.call_mut(path_elem);
+    fn create_tree_path_ctx(&self, mut ctx: PutCtx, mut visited_node: PathElem<NodeId>) -> PutCtx {
+        visited_node.updated_after_child_changing::<D>(ctx.child_hash); // todo double @check
 
-        todo!("Rebalancing is not ready")
+        let PathElem {
+            branch_id,
+            branch,
+            next_child_idx,
+        } = visited_node;
+
+        if branch.has_overflow(self.max_degree) {
+            log::debug!(
+                "Do split for branch_id={}, branch={:?}, next_child_idx={}",
+                branch_id,
+                branch,
+                next_child_idx
+            );
+
+            todo!("Rebalancing is not ready")
+        } else {
+            let child_hash = branch.hash.clone();
+            ctx.new_state_proof
+                .add(branch.to_proof::<D>(next_child_idx));
+            ctx.put_task
+                .nodes_to_save
+                .push(NodeWithId::new(branch_id, Node::Branch(branch)));
+            PutCtx {
+                new_state_proof: ctx.new_state_proof,
+                child_hash,
+                put_task: ctx.put_task,
+            }
+        }
     }
 
     /// If leaf isn't overflowed
@@ -235,10 +261,8 @@ where
             todo!("Rebalancing is not ready")
         } else {
             PutCtx {
-                new_state_proof: MerklePath::new(new_leaf.to_proof(searched_value_idx).unwrap()),
-                update_parent_fn: Box::new(updated_after_child_changing::<D>(
-                    new_leaf.hash.clone(),
-                )),
+                new_state_proof: MerklePath::new(new_leaf.to_proof(searched_value_idx)),
+                child_hash: new_leaf.hash.clone(),
                 put_task: PutTask::new(
                     vec![NodeWithId::new(leaf_id, Node::Leaf(new_leaf))],
                     false,
@@ -286,20 +310,10 @@ impl PutTask {
 
 /// Just a state for each recursive operation of ''logicalPut''.
 struct PutCtx {
+    /// Merkle path of made changes
     pub new_state_proof: MerklePath,
-    /// Function-mutator that will be applied to parent of current node
-    pub update_parent_fn: Box<dyn FnMut(PathElem<NodeId>) -> PathElem<NodeId>>,
+    /// A checksum of updated child that should be placed to its parent
+    pub child_hash: Hash,
+    /// What actually should be done, when we will commit changed
     pub put_task: PutTask,
-}
-
-/// Returns function that update children's checksum into parent node
-fn updated_after_child_changing<D: Digest>(
-    child_checksum: Hash,
-) -> impl FnMut(PathElem<NodeId>) -> PathElem<NodeId> {
-    move |mut visited_branch| {
-        visited_branch
-            .branch
-            .update_child_checksum::<D>(child_checksum.clone(), visited_branch.next_child_idx);
-        visited_branch
-    }
 }

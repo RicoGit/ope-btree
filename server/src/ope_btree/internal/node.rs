@@ -84,7 +84,7 @@ impl LeafNode {
         let keys = vec![key];
         let values_refs = vec![value_ref];
         let values_hashes = vec![value_hash];
-        let kv_hashes = LeafNode::build_checksum::<D>(keys.clone(), values_hashes.clone());
+        let kv_hashes = LeafNode::build_kv_hashes::<D>(keys.clone(), values_hashes.clone());
         let hash = LeafNode::leaf_hash::<D>(kv_hashes.clone());
         let leaf = LeafNode {
             keys,
@@ -100,7 +100,7 @@ impl LeafNode {
     }
 
     /// Returns array of checksums for each key-value pair
-    fn build_checksum<D: Digest>(keys: Vec<Key>, values: Vec<Hash>) -> Vec<Hash> {
+    fn build_kv_hashes<D: Digest>(keys: Vec<Key>, values: Vec<Hash>) -> Vec<Hash> {
         keys.into_iter()
             .zip(values.into_iter())
             .map(|(k, v)| {
@@ -113,9 +113,7 @@ impl LeafNode {
 
     /// Calculates checksum of leaf by folding ''kv_hashes''
     pub fn leaf_hash<D: Digest>(kv_hashes: Vec<Hash>) -> Hash {
-        NodeProof::try_new(Hash::empty(), kv_hashes, None)
-            .expect("leaf_hash: NodeProof should be build")
-            .calc_checksum::<D>(None)
+        NodeProof::new(Hash::empty(), kv_hashes, None).calc_checksum::<D>(None)
     }
 
     /// Replace old key into Leaf with new one
@@ -139,7 +137,7 @@ impl LeafNode {
         misc::replace(&mut self.values_hashes, val_hash, idx);
 
         self.kv_hashes =
-            LeafNode::build_checksum::<D>(self.keys.clone(), self.values_hashes.clone());
+            LeafNode::build_kv_hashes::<D>(self.keys.clone(), self.values_hashes.clone());
         self.hash = LeafNode::leaf_hash::<D>(self.kv_hashes.clone());
         self
     }
@@ -165,7 +163,7 @@ impl LeafNode {
         self.values_hashes.insert(idx, val_hash);
 
         self.kv_hashes =
-            LeafNode::build_checksum::<D>(self.keys.clone(), self.values_hashes.clone());
+            LeafNode::build_kv_hashes::<D>(self.keys.clone(), self.values_hashes.clone());
         self.hash = LeafNode::leaf_hash::<D>(self.kv_hashes.clone());
         self.size += 1;
         self
@@ -175,8 +173,8 @@ impl LeafNode {
         self.size > max
     }
 
-    pub fn to_proof(&self, substitution_idx: usize) -> Result<NodeProof, MerkleError> {
-        NodeProof::try_new(
+    pub fn to_proof(&self, substitution_idx: usize) -> NodeProof {
+        NodeProof::new(
             Hash::empty(),
             self.kv_hashes.clone(),
             Some(substitution_idx),
@@ -220,11 +218,19 @@ impl BranchNode {
     /// Returns checksum of branch node
     pub fn branch_hash<D: Digest>(keys: Vec<Key>, children_hashes: Vec<Hash>) -> Hash {
         // todo double @check this, i'm not sure
+        NodeProof::new_proof::<D>(keys, children_hashes, None).calc_checksum::<D>(None)
+    }
 
-        let mut hash = Hash::empty();
-        hash.concat_all(keys.into_iter().map(|key| Hash::build::<D, _>(key.bytes())));
-        let proof = NodeProof::try_new(hash, children_hashes, None).unwrap();
-        proof.calc_checksum::<D>(None)
+    pub fn has_overflow(&self, max: usize) -> bool {
+        self.size > max
+    }
+
+    pub fn to_proof<D: Digest>(&self, substitution_idx: usize) -> NodeProof {
+        NodeProof::new_proof::<D>(
+            self.keys.clone(),
+            self.children_hashes.clone(),
+            Some(substitution_idx),
+        )
     }
 }
 
