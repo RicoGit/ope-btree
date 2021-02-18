@@ -43,10 +43,11 @@ where
     value_store: Arc<RwLock<VS>>,
 }
 
-impl<NS, VS, D: Digest> OpeDatabase<NS, VS, D>
+impl<NS, VS, D> OpeDatabase<NS, VS, D>
 where
     NS: KVStore<Vec<u8>, Vec<u8>>,
     VS: KVStore<Bytes, Bytes>,
+    D: Digest + 'static,
 {
     fn new(index: OpeBTree<NS, D>, store: VS) -> Self {
         OpeDatabase {

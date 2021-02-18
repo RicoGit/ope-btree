@@ -135,13 +135,18 @@ where
     config: OpeBTreeConf,
     /// Generates ValueRef for BTree
     val_ref_gen: Arc<Mutex<ValRefGen>>,
+    /// Max number of keys in node
+    max_degree: usize,
+    /// Min number of keys in node
+    min_degree: usize,
 
     phantom_data: PhantomData<D>,
 }
 
-impl<Store, D: Digest> OpeBTree<Store, D>
+impl<Store, D> OpeBTree<Store, D>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
+    D: Digest + 'static,
 {
     pub fn new(
         config: OpeBTreeConf,
@@ -150,11 +155,15 @@ where
     ) -> Self {
         let node_store = Arc::new(RwLock::new(node_store));
         let depth = AtomicUsize::new(0);
+        let max_degree = config.arity as usize;
+        let min_degree = (config.alpha * config.arity as f32) as usize;
         OpeBTree {
             config,
             depth,
             node_store,
             val_ref_gen: Arc::new(Mutex::new(val_ref_gen)),
+            max_degree,
+            min_degree,
             phantom_data: PhantomData::default(),
         }
     }
@@ -233,8 +242,13 @@ where
             self.commit_new_state(task).await?;
             Ok(value_ref)
         } else {
-            let flow =
-                PutFlow::<_, _, D>::new(cmd, self.node_store.clone(), self.val_ref_gen.clone());
+            let flow = PutFlow::<_, _, D>::new(
+                cmd,
+                self.node_store.clone(),
+                self.val_ref_gen.clone(),
+                self.max_degree,
+                self.min_degree,
+            );
             let (put_task, value_ref) = flow.put_for_node(ROOT_ID, root).await?;
 
             // persists changes

@@ -170,6 +170,18 @@ impl LeafNode {
         self.size += 1;
         self
     }
+
+    pub fn has_overflow(&self, max: usize) -> bool {
+        self.size > max
+    }
+
+    pub fn to_proof(&self, substitution_idx: usize) -> Result<NodeProof, MerkleError> {
+        NodeProof::try_new(
+            Hash::empty(),
+            self.kv_hashes.clone(),
+            Some(substitution_idx),
+        )
+    }
 }
 
 /// Branch node of the tree, do not contains any business values, contains
@@ -198,6 +210,21 @@ impl BranchNode {
     /// Creates and returns a new empty BranchNode.
     pub fn new() -> Self {
         BranchNode::default()
+    }
+
+    pub fn update_child_checksum<D: Digest>(&mut self, new_child_hash: Hash, idx: usize) {
+        misc::replace(&mut self.children_hashes.clone(), new_child_hash, idx);
+        self.hash = BranchNode::branch_hash::<D>(self.keys.clone(), self.children_hashes.clone());
+    }
+
+    /// Returns checksum of branch node
+    pub fn branch_hash<D: Digest>(keys: Vec<Key>, children_hashes: Vec<Hash>) -> Hash {
+        // todo double @check this, i'm not sure
+
+        let mut hash = Hash::empty();
+        hash.concat_all(keys.into_iter().map(|key| Hash::build::<D, _>(key.bytes())));
+        let proof = NodeProof::try_new(hash, children_hashes, None).unwrap();
+        proof.calc_checksum::<D>(None)
     }
 }
 

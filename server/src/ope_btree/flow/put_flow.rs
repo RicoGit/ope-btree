@@ -2,10 +2,11 @@ use crate::ope_btree::command::Cmd;
 use crate::ope_btree::flow::get_flow::GetFlow;
 use crate::ope_btree::internal::node::{LeafNode, Node, NodeWithId};
 use crate::ope_btree::internal::node_store::BinaryNodeStore;
+use crate::ope_btree::internal::tree_path::PathElem;
 use crate::ope_btree::{BTreeErr, NodeId, Result, Trail, ValRefGen, ValueRef};
 use common::gen::{Generator, NumGen};
 use common::merkle::MerklePath;
-use common::Digest;
+use common::{Digest, Hash};
 use kvstore_api::kvstore::KVStore;
 use protocol::{ClientPutDetails, PutCallbacks, SearchResult};
 use std::marker::PhantomData;
@@ -22,24 +23,31 @@ where
     node_store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>,
     val_ref_gen: Arc<Mutex<ValRefGen>>,
     phantom_data: PhantomData<D>,
+    max_degree: usize,
+    min_degree: usize,
 }
 
 /// Implementation PutFlow for PutCallbacks
-impl<Cb, Store, D: Digest> PutFlow<Cb, Store, D>
+impl<Cb, Store, D> PutFlow<Cb, Store, D>
 where
     Cb: PutCallbacks + Clone,
     Store: KVStore<Vec<u8>, Vec<u8>>,
+    D: Digest + 'static,
 {
     pub fn new(
         cmd: Cmd<Cb>,
         node_store: Arc<RwLock<BinaryNodeStore<NodeId, Node, Store, NumGen>>>,
         val_ref_gen: Arc<Mutex<ValRefGen>>,
+        max_degree: usize,
+        min_degree: usize,
     ) -> Self {
         PutFlow {
             cmd,
             node_store,
             val_ref_gen,
             phantom_data: PhantomData::default(),
+            max_degree,
+            min_degree,
         }
     }
 
@@ -148,6 +156,10 @@ where
         Ok(res)
     }
 
+    //
+    // Logical put
+    //
+
     /// This method does all mutation operations over the tree in memory without changing tree state
     /// and composes merkle path for new tree state. It inserts new value to leaf,
     /// and does tree rebalancing if it needed.
@@ -176,7 +188,64 @@ where
             trail
         );
 
-        todo!()
+        let leaf_put_ctx: PutCtx = self.create_leaf_ctx(leaf_id, new_leaf, found_val_idx);
+        let put_ctx = trail
+            .branches
+            .into_iter()
+            .rfold(leaf_put_ctx, |ctx, el| self.create_tree_path_ctx(ctx, el));
+        (put_ctx.new_state_proof, put_ctx.put_task)
+    }
+
+    /// Using for folding all visited branches from ''trail''.
+    ///
+    /// If branch isn't overflowed
+    ///  * updates branch checksum into parent node and put branch and it's parent to ''nodesToSave'' into [[PutTask]].
+    ///
+    /// If it's overflowed
+    ///  * splits branch into two, adds left branch to parent as a new child and updates right branch checksum into parent node.
+    ///  * if parent isn't exist create new parent with 2 new children.
+    ///  * put all updated and new nodes into ''nodesToSave'' into [[PutTask]]
+    fn create_tree_path_ctx(&self, ctx: PutCtx, path_elem: PathElem<NodeId>) -> PutCtx {
+        // let func = ctx.update_parent_fn.as_ref();
+        // let PathElem { branch_id, branch, next_child_idx } = func.call_mut(path_elem);
+
+        todo!("Rebalancing is not ready")
+    }
+
+    /// If leaf isn't overflowed
+    /// * updates leaf checksum into parent node and put leaf and it's parent to ''nodesToSave'' into [[PutTask]].
+    ///
+    /// If it's overflowed
+    /// * splits leaf into two, adds left leaf to parent as new child and update right leaf checksum into parent node.
+    /// * if parent isn't exist create new parent with 2 new children.
+    /// * puts all updated and new nodes to ''nodesToSave'' into [[PutTask]]
+    ///
+    /// `leaf_id`  Id of leaf that was updated
+    /// `new_leaf` Leaf that was updated with new key and value
+    /// `searched_value_idx` Insertion index of a new value
+    ///
+    fn create_leaf_ctx(
+        &self,
+        leaf_id: NodeId,
+        new_leaf: LeafNode,
+        searched_value_idx: usize,
+    ) -> PutCtx {
+        if new_leaf.has_overflow(self.max_degree) {
+            log::debug!("Do split for leaf_id={}, leaf={:?}", leaf_id, new_leaf);
+            todo!("Rebalancing is not ready")
+        } else {
+            PutCtx {
+                new_state_proof: MerklePath::new(new_leaf.to_proof(searched_value_idx).unwrap()),
+                update_parent_fn: Box::new(updated_after_child_changing::<D>(
+                    new_leaf.hash.clone(),
+                )),
+                put_task: PutTask::new(
+                    vec![NodeWithId::new(leaf_id, Node::Leaf(new_leaf))],
+                    false,
+                    false,
+                ),
+            }
+        }
     }
 }
 
@@ -212,5 +281,25 @@ impl PutTask {
             increase_depth,
             was_splitting,
         }
+    }
+}
+
+/// Just a state for each recursive operation of ''logicalPut''.
+struct PutCtx {
+    pub new_state_proof: MerklePath,
+    /// Function-mutator that will be applied to parent of current node
+    pub update_parent_fn: Box<dyn FnMut(PathElem<NodeId>) -> PathElem<NodeId>>,
+    pub put_task: PutTask,
+}
+
+/// Returns function that update children's checksum into parent node
+fn updated_after_child_changing<D: Digest>(
+    child_checksum: Hash,
+) -> impl FnMut(PathElem<NodeId>) -> PathElem<NodeId> {
+    move |mut visited_branch| {
+        visited_branch
+            .branch
+            .update_child_checksum::<D>(child_checksum.clone(), visited_branch.next_child_idx);
+        visited_branch
     }
 }

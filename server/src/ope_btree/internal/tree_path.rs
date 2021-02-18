@@ -5,7 +5,7 @@ use crate::ope_btree::internal::node::BranchNode;
 #[derive(Clone, Debug)]
 pub struct TreePath<Id> {
     /// The path from root to leaf
-    branches: Vec<PathElem<Id>>,
+    pub branches: Vec<PathElem<Id>>,
 }
 
 impl<Id> TreePath<Id> {
@@ -44,9 +44,9 @@ impl<Id> TreePath<Id> {
 #[derive(Clone, Debug)]
 pub struct PathElem<Id> {
     /// Current branch node id (used for saving node to Store)
-    branch_id: Id,
+    pub branch_id: Id,
     /// Current branch node
-    branch: BranchNode,
+    pub branch: BranchNode,
     /// Next child position index.
-    next_child_idx: usize,
+    pub next_child_idx: usize,
 }
