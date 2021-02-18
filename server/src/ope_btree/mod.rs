@@ -221,7 +221,7 @@ where
             // send to client empty details, client answers with put details
             let put_details = cmd.cb.put_details(vec![], vec![]).await?;
             let value_ref = self.val_ref_gen.lock().await.next();
-            let new_leaf = LeafNode::create::<D>(
+            let new_leaf = LeafNode::new::<D>(
                 put_details.key.into(),
                 value_ref.clone(),
                 put_details.val_hash.into(),

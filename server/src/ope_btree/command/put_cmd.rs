@@ -16,7 +16,7 @@ impl<Cb: PutCallbacks> Cmd<Cb> {
     pub async fn put_details(&self, leaf: LeafNode) -> Result<ClientPutDetails> {
         let res = self
             .cb
-            .put_details(leaf.keys.into_bytes(), leaf.values_hashes.into_bytes())
+            .put_details(leaf.keys.into_bytes(), leaf.val_hashes.into_bytes())
             .await?;
         Ok(res)
     }

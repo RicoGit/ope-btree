@@ -52,7 +52,7 @@ impl<Cb: SearchCallback> Cmd<Cb> {
     pub async fn submit_leaf(&self, leaf: LeafNode) -> Result<SearchResult> {
         let LeafNode {
             keys,
-            values_hashes,
+            val_hashes: values_hashes,
             ..
         } = leaf;
 

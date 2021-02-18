@@ -1,17 +1,22 @@
-use crate::ope_btree::command::Cmd;
-use crate::ope_btree::flow::get_flow::GetFlow;
-use crate::ope_btree::internal::node::{LeafNode, Node, NodeWithId};
-use crate::ope_btree::internal::node_store::BinaryNodeStore;
-use crate::ope_btree::internal::tree_path::PathElem;
-use crate::ope_btree::{BTreeErr, NodeId, Result, Trail, ValRefGen, ValueRef};
+use std::marker::PhantomData;
+use std::sync::Arc;
+
+use kvstore_api::kvstore::KVStore;
+use tokio::sync::{Mutex, RwLock};
+
 use common::gen::{Generator, NumGen};
 use common::merkle::MerklePath;
 use common::{Digest, Hash};
-use kvstore_api::kvstore::KVStore;
 use protocol::{ClientPutDetails, PutCallbacks, SearchResult};
-use std::marker::PhantomData;
-use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+
+use crate::ope_btree::command::Cmd;
+use crate::ope_btree::flow::get_flow::GetFlow;
+use crate::ope_btree::internal::node::{
+    BranchNode, ChildRef, LeafNode, Node, NodeWithId, TreeNode,
+};
+use crate::ope_btree::internal::node_store::BinaryNodeStore;
+use crate::ope_btree::internal::tree_path::PathElem;
+use crate::ope_btree::{BTreeErr, NodeId, Result, Trail, ValRefGen, ValueRef, ROOT_ID};
 
 /// Encapsulates all logic for putting into tree
 #[derive(Debug, Clone)]
@@ -93,8 +98,9 @@ where
         let (updated_leaf, val_ref) = self.update_leaf(leaf, put_details.clone()).await?;
 
         // makes all transformations over the copy of tree
-        let (new_state_proof, put_task) =
-            self.logical_put(leaf_id, updated_leaf, put_details.idx().clone(), trail);
+        let (new_state_proof, put_task) = self
+            .logical_put(leaf_id, updated_leaf, put_details.idx().clone(), trail)
+            .await;
 
         // after all the logical operations, we need to send the merkle path to the client for verification
         self.cmd
@@ -123,16 +129,12 @@ where
         let res = match search_result {
             SearchResult::Ok(idx_of_update) => {
                 // key was founded in this Leaf, update leaf with new value
-                let old_value_ref =
-                    leaf.values_refs
-                        .get(idx_of_update)
-                        .cloned()
-                        .ok_or_else(|| {
-                            BTreeErr::node_not_found(
-                                idx_of_update,
-                                "update_leaf: Invalid node idx from client",
-                            )
-                        })?;
+                let old_value_ref = leaf.val_refs.get(idx_of_update).cloned().ok_or_else(|| {
+                    BTreeErr::node_not_found(
+                        idx_of_update,
+                        "update_leaf: Invalid node idx from client",
+                    )
+                })?;
                 let updated_leaf = leaf.update::<D>(
                     key.into(),
                     old_value_ref.clone(),
@@ -174,7 +176,7 @@ where
     ///
     /// [`MerklePath`]: common/merkle/struct.MerklePath.html
     /// [`PutTask`]: struct.PutTask.html
-    pub fn logical_put(
+    pub async fn logical_put(
         &self,
         leaf_id: NodeId,
         new_leaf: LeafNode,
@@ -188,12 +190,13 @@ where
             trail
         );
 
-        let leaf_put_ctx: PutCtx = self.create_leaf_ctx(leaf_id, new_leaf, found_val_idx);
-        let put_ctx = trail
-            .branches
-            .into_iter()
-            .rfold(leaf_put_ctx, |ctx, el| self.create_tree_path_ctx(ctx, el));
-        (put_ctx.new_state_proof, put_ctx.put_task)
+        let mut ctx: PutCtx = self.create_leaf_ctx(leaf_id, new_leaf, found_val_idx).await;
+
+        for branch in trail.branches.into_iter().rev() {
+            ctx = self.create_tree_path_ctx(ctx, branch).await
+        }
+
+        (ctx.new_state_proof, ctx.put_task)
     }
 
     /// Using for folding all visited branches from ''trail''.
@@ -205,14 +208,18 @@ where
     ///  * splits branch into two, adds left branch to parent as a new child and updates right branch checksum into parent node.
     ///  * if parent isn't exist create new parent with 2 new children.
     ///  * put all updated and new nodes into ''nodesToSave'' into [[PutTask]]
-    fn create_tree_path_ctx(&self, mut ctx: PutCtx, mut visited_node: PathElem<NodeId>) -> PutCtx {
-        visited_node.updated_after_child_changing::<D>(ctx.child_hash); // todo double @check
+    async fn create_tree_path_ctx(
+        &self,
+        mut ctx: PutCtx,
+        visited_node: PathElem<NodeId>,
+    ) -> PutCtx {
+        let updated = ctx.update_parent.update_parent::<D>(visited_node); // todo double @check
 
         let PathElem {
             branch_id,
             branch,
             next_child_idx,
-        } = visited_node;
+        } = updated;
 
         if branch.has_overflow(self.max_degree) {
             log::debug!(
@@ -222,7 +229,68 @@ where
                 next_child_idx
             );
 
-            todo!("Rebalancing is not ready")
+            let is_root = branch_id == ROOT_ID;
+            let (left, right) = branch.split::<D>();
+
+            let left_id = self.next_node_ref().await;
+            // RootId is always linked with root node and will not changed, store right node with new id if split root
+            let right_id = if is_root {
+                self.next_node_ref().await
+            } else {
+                branch_id
+            };
+
+            let is_insert_to_left = next_child_idx < left.size;
+            let (affected_branch, affected_branch_idx) = if is_insert_to_left {
+                (left.clone(), left_id)
+            } else {
+                (right.clone(), right_id)
+            };
+
+            ctx.new_state_proof
+                .add(affected_branch.to_proof::<D>(affected_branch_idx));
+
+            if is_root {
+                // there was no parent, root node was splitting
+
+                let pop_up_key = left.keys.iter().last().cloned().expect("Can't be empty");
+                let new_parent = BranchNode::new::<D>(
+                    pop_up_key,
+                    ChildRef::new(left_id, left.hash.clone()),
+                    ChildRef::new(right_id, right.hash.clone()),
+                );
+                let affected_parent_idx = if is_insert_to_left { 0 } else { 1 };
+
+                ctx.new_state_proof
+                    .add(new_parent.clone().to_proof::<D>(affected_parent_idx));
+
+                PutCtx {
+                    new_state_proof: ctx.new_state_proof,
+                    update_parent: UpdateParent::Nothing,
+                    put_task: PutTask::new(
+                        vec![
+                            NodeWithId::new(left_id, Node::Branch(left)),
+                            NodeWithId::new(right_id, Node::Branch(right)),
+                            NodeWithId::new(ROOT_ID, Node::Branch(new_parent)),
+                        ],
+                        true,
+                        true,
+                    ),
+                }
+            } else {
+                // some regular branch was splitting
+                let left_with_id = NodeWithId::new(left_id, Node::Branch(left));
+                let right_with_id = NodeWithId::new(right_id, Node::Branch(right));
+                PutCtx {
+                    new_state_proof: ctx.new_state_proof,
+                    update_parent: UpdateParent::AfterChildSplitting {
+                        left: left_with_id.clone(),
+                        right: right_with_id.clone(),
+                        is_insert_to_left,
+                    },
+                    put_task: PutTask::new(vec![left_with_id, right_with_id], false, true),
+                }
+            }
         } else {
             let child_hash = branch.hash.clone();
             ctx.new_state_proof
@@ -232,7 +300,7 @@ where
                 .push(NodeWithId::new(branch_id, Node::Branch(branch)));
             PutCtx {
                 new_state_proof: ctx.new_state_proof,
-                child_hash,
+                update_parent: UpdateParent::AfterChildChanging { child_hash },
                 put_task: ctx.put_task,
             }
         }
@@ -250,7 +318,7 @@ where
     /// `new_leaf` Leaf that was updated with new key and value
     /// `searched_value_idx` Insertion index of a new value
     ///
-    fn create_leaf_ctx(
+    async fn create_leaf_ctx(
         &self,
         leaf_id: NodeId,
         new_leaf: LeafNode,
@@ -258,11 +326,73 @@ where
     ) -> PutCtx {
         if new_leaf.has_overflow(self.max_degree) {
             log::debug!("Do split for leaf_id={}, leaf={:?}", leaf_id, new_leaf);
-            todo!("Rebalancing is not ready")
+
+            let is_root = leaf_id == ROOT_ID;
+            // get ids for new nodes, right node should be with new id, because each leaf points to right sibling
+            let right_id = self.next_node_ref().await;
+            // RootId is always linked with root node and will not changed, store left node with new id if split root
+            let left_id = if is_root {
+                self.next_node_ref().await
+            } else {
+                leaf_id
+            };
+
+            let (left, right) = new_leaf.split::<D>(right_id);
+
+            let is_insert_to_left = searched_value_idx < left.size;
+            let (affected_leaf, affected_leaf_idx) = if is_insert_to_left {
+                (left.clone(), searched_value_idx)
+            } else {
+                (right.clone(), searched_value_idx - left.size.clone())
+            };
+
+            let mut merkle_path = MerklePath::new(affected_leaf.to_proof(affected_leaf_idx));
+
+            if is_root {
+                // there is no parent, root leaf was split
+                let pop_up_key = left.keys.iter().last().cloned().expect("Can't be empty");
+                let new_parent = BranchNode::new::<D>(
+                    pop_up_key,
+                    ChildRef::new(left_id, left.hash.clone()),
+                    ChildRef::new(right_id, right.hash.clone()),
+                );
+                let affected_parent_idx = if is_insert_to_left { 0 } else { 1 };
+
+                merkle_path.add(new_parent.clone().to_proof::<D>(affected_parent_idx));
+
+                PutCtx {
+                    new_state_proof: merkle_path,
+                    update_parent: UpdateParent::Nothing,
+                    put_task: PutTask::new(
+                        vec![
+                            NodeWithId::new(leaf_id, Node::Leaf(left)),
+                            NodeWithId::new(right_id, Node::Leaf(right)),
+                            NodeWithId::new(ROOT_ID, Node::Branch(new_parent)),
+                        ],
+                        true,
+                        true,
+                    ),
+                }
+            } else {
+                // some regular leaf was split
+                let left_with_id = NodeWithId::new(leaf_id, Node::Leaf(left));
+                let right_with_id = NodeWithId::new(right_id, Node::Leaf(right));
+                PutCtx {
+                    new_state_proof: merkle_path,
+                    update_parent: UpdateParent::AfterChildSplitting {
+                        left: left_with_id.clone(),
+                        right: right_with_id.clone(),
+                        is_insert_to_left,
+                    },
+                    put_task: PutTask::new(vec![left_with_id, right_with_id], false, true),
+                }
+            }
         } else {
             PutCtx {
                 new_state_proof: MerklePath::new(new_leaf.to_proof(searched_value_idx)),
-                child_hash: new_leaf.hash.clone(),
+                update_parent: UpdateParent::AfterChildChanging {
+                    child_hash: new_leaf.hash.clone(),
+                },
                 put_task: PutTask::new(
                     vec![NodeWithId::new(leaf_id, Node::Leaf(new_leaf))],
                     false,
@@ -270,6 +400,12 @@ where
                 ),
             }
         }
+    }
+
+    /// Generates new btree node reference
+    async fn next_node_ref(&self) -> NodeId {
+        let mut store = self.node_store.write().await;
+        store.next_id()
     }
 }
 
@@ -308,12 +444,86 @@ impl PutTask {
     }
 }
 
+pub enum UpdateParent {
+    Nothing,
+    AfterChildChanging {
+        child_hash: Hash,
+    },
+    AfterChildSplitting {
+        left: NodeWithId<NodeId, Node>,
+        right: NodeWithId<NodeId, Node>,
+        is_insert_to_left: bool,
+    },
+}
+
+impl UpdateParent {
+    /// Function-mutator that will be applied to parent of current node
+    fn update_parent<D: Digest>(self, mut visited_node: PathElem<NodeId>) -> PathElem<NodeId> {
+        match self {
+            UpdateParent::Nothing => visited_node,
+            UpdateParent::AfterChildChanging { child_hash } => {
+                // Updates child's checksum into parent node
+                visited_node.updated_after_child_changing::<D>(child_hash);
+                visited_node
+            }
+            UpdateParent::AfterChildSplitting {
+                left,
+                right,
+                is_insert_to_left,
+            } => {
+                // Returns function that makes two changes into the parent node:
+                //  * It inserts left node as new child before right node.
+                //  * It updates checksum and id of changed right node.
+
+                let PathElem {
+                    branch_id,
+                    mut branch,
+                    next_child_idx,
+                } = visited_node;
+
+                let pop_up_key = left.node.keys().last().unwrap().clone();
+                log::trace!(
+                    "Add child to parent node: with key={:?}, child={:?}, idx={}",
+                    pop_up_key,
+                    left,
+                    next_child_idx
+                );
+
+                // update parent node with new left node. Parent already contains right node as a child (but with stale id and checksum).
+                // updating right node checksum and id is needed, checksum and id of right node were changed after splitting
+
+                branch.insert_child::<D>(
+                    pop_up_key,
+                    ChildRef::new(left.id, left.node.hash()),
+                    next_child_idx,
+                );
+                branch.update_child_ref::<D>(
+                    ChildRef::new(right.id, right.node.hash()),
+                    next_child_idx + 1,
+                );
+
+                let idx_of_updated_child = if is_insert_to_left {
+                    next_child_idx
+                } else {
+                    next_child_idx + 1
+                };
+
+                PathElem {
+                    branch_id,
+                    branch,
+                    next_child_idx: idx_of_updated_child,
+                }
+            }
+        }
+    }
+}
+
 /// Just a state for each recursive operation of ''logicalPut''.
 struct PutCtx {
     /// Merkle path of made changes
     pub new_state_proof: MerklePath,
-    /// A checksum of updated child that should be placed to its parent
-    pub child_hash: Hash,
+    /// Describes changes should be done over parent node
+    pub update_parent: UpdateParent,
     /// What actually should be done, when we will commit changed
     pub put_task: PutTask,
 }

@@ -110,7 +110,7 @@ where
         match response {
             Ok(idx) => {
                 // if client returns index, fetch value for this index and send it to client
-                let value_ref = leaf.values_refs.get(idx).cloned();
+                let value_ref = leaf.val_refs.get(idx).cloned();
                 Ok(value_ref)
             }
             _ => Ok(None),
