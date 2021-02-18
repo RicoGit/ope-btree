@@ -297,6 +297,7 @@ where
         let mut store = self.node_store.write().await;
 
         for NodeWithId { id, node } in task.nodes_to_save {
+d            log::trace!("Store: {}={:?}", id, node);
             store.set(id, node).await?;
         }
         // todo end transaction
@@ -366,7 +367,7 @@ mod tests {
     ) -> OpeBTree<Store, NoOpHasher> {
         OpeBTree::new(
             OpeBTreeConf {
-                arity: 4,
+                arity: 5,
                 alpha: 0.25_f32,
             },
             store,
@@ -438,6 +439,49 @@ mod tests {
         let cmd4 = Cmd::new(TestCallback::for_get(vec![], vec![SearchResult::Err(1)]));
         let res4 = tree.get(cmd4).await.unwrap();
         assert_eq!(res4, None);
+    }
+
+    #[tokio::test]
+    async fn put_many_and_get_them_back_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        // Put items into empty tree and get them back
+        let mut tree = empty_tree().await;
+
+        // get from empty tree
+        assert_eq!(
+            tree.get(Cmd::new(TestCallback::empty())).await.unwrap(),
+            None
+        );
+
+        put_many(&mut tree).await;
+
+        // get K1
+        let submit_leaf_vec = vec![SearchResult::Ok(0)];
+        let cmd1 = Cmd::new(TestCallback::new(vec![0, 0], submit_leaf_vec, vec![], vec![]));
+        let res1 = tree.get(cmd1).await.unwrap();
+        assert_eq!(res1, Some(ValueRef::from_str("\0\0\0\0\0\0\0\x11"))); // val_ref is the same as we got from put
+
+        // todo doesn't work well  after 22 elements, problem with split branch
+    }
+
+    async fn put_many(
+        tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
+    ) {
+        let number = 21;
+
+        let search_result_vec: Vec<usize> = vec![0; number];
+        let next_child_idx_vec: Vec<usize> = vec![0; number];
+        for idx in (1..number).rev() {
+            let cmd2 = Cmd::new(TestCallback::new(
+                vec![search_result_vec[idx -1]],
+                vec![],
+                vec![ClientPutDetails::new(format!("K{}", idx).into(), format!("V{}", idx).into(), SearchResult::Err(search_result_vec[idx-1]))],
+                vec!["*".into()],
+            ));
+
+            tree.put(cmd2).await.unwrap();
+        }
     }
 
     #[tokio::test]

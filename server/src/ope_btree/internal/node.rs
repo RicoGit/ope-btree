@@ -149,7 +149,7 @@ impl LeafNode {
         idx: usize,
     ) -> LeafNode {
         assert!(
-            idx != 0 || idx >= self.size,
+            idx <= self.size,
             format!(
                 "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
                 idx, self.size
@@ -292,6 +292,7 @@ impl BranchNode {
         self.keys.insert(idx, key);
         self.children_refs.insert(idx, child_ref.id);
         self.children_hashes.insert(idx, child_ref.checksum);
+        self.size += 1;
         self.hash = BranchNode::branch_hash::<D>(self.keys.clone(), self.children_hashes.clone());
     }
 

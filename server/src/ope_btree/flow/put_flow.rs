@@ -68,9 +68,9 @@ where
 
         loop {
             match current_node {
-                Node::Leaf(leaf) => return self.put_for_leaf(node_id, leaf, trail).await,
+                Node::Leaf(leaf) => return self.put_for_leaf(current_node_id, leaf, trail).await,
                 Node::Branch(branch) => {
-                    log::debug!("PutFlow: Put for branch={:?}", &branch);
+                    log::debug!("PutFlow: Put for branch_id={}, branch {:?}", current_node_id, &branch);
 
                     let res = get_flow.search_child(branch.clone()).await?;
                     trail.push(current_node_id, branch, res.found_idx);
@@ -92,7 +92,7 @@ where
         leaf: LeafNode,
         trail: Trail,
     ) -> Result<(PutTask, ValueRef)> {
-        log::debug!("Put to leaf={:?}, id={:?}", &leaf, leaf_id);
+        log::debug!("Put for leaf_id={:?}, leaf={:?}", leaf_id, &leaf);
 
         let put_details = self.cmd.put_details(leaf.clone()).await?;
         let (updated_leaf, val_ref) = self.update_leaf(leaf, put_details.clone()).await?;
@@ -242,9 +242,9 @@ where
 
             let is_insert_to_left = next_child_idx < left.size;
             let (affected_branch, affected_branch_idx) = if is_insert_to_left {
-                (left.clone(), left_id)
+                (left.clone(), next_child_idx)
             } else {
-                (right.clone(), right_id)
+                (right.clone(), next_child_idx - left.size)
             };
 
             ctx.new_state_proof
@@ -365,7 +365,7 @@ where
                     update_parent: UpdateParent::Nothing,
                     put_task: PutTask::new(
                         vec![
-                            NodeWithId::new(leaf_id, Node::Leaf(left)),
+                            NodeWithId::new(left_id, Node::Leaf(left)),
                             NodeWithId::new(right_id, Node::Leaf(right)),
                             NodeWithId::new(ROOT_ID, Node::Branch(new_parent)),
                         ],
@@ -375,7 +375,7 @@ where
                 }
             } else {
                 // some regular leaf was split
-                let left_with_id = NodeWithId::new(leaf_id, Node::Leaf(left));
+                let left_with_id = NodeWithId::new(left_id, Node::Leaf(left));
                 let right_with_id = NodeWithId::new(right_id, Node::Leaf(right));
                 PutCtx {
                     new_state_proof: merkle_path,

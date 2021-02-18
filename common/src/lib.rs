@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use sha3::digest::generic_array::ArrayLength;
 use sha3::digest::generic_array::GenericArray;
 pub use sha3::Digest;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Debug};
 
 pub const STR_END_SIGN: u8 = 0_u8;
 
@@ -34,7 +34,7 @@ impl Key {
 }
 
 /// A hash of anything.
-#[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, PartialOrd, PartialEq, Serialize, Deserialize, Default)]
 pub struct Hash(pub BytesMut);
 
 impl Hash {
@@ -91,6 +91,13 @@ impl AsRef<[u8]> for Hash {
 }
 
 impl Display for Hash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = self.as_str().unwrap_or_else(|_| "[]".to_string());
+        write!(f, "Hash[{}, {}]", str.len(), str)
+    }
+}
+
+impl Debug for Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = self.as_str().unwrap_or_else(|_| "[]".to_string());
         write!(f, "Hash[{}, {}]", str.len(), str)

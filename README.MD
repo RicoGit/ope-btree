@@ -13,6 +13,11 @@ related paper: https://eprint.iacr.org/2013/129.pdf
     
     cargo clippy (recomended)
     
+    
+### Run test with logs
+
+    RUST_LOG=debug cargo test ope_btree::tests::put_many_and_get_them_back_test -- --nocapture    
+    
 ### Notes: 
 
 - BTree operarates only bytes, there is no needed to different K and V

@@ -51,19 +51,19 @@ where
     ///
     /// Returns index of searched child and the child
     pub async fn search_child(&self, branch: BranchNode) -> Result<FoundChild> {
-        let found_idx = self.cmd.next_child_idx(branch.clone()).await?;
-        let child_id = *branch.children_refs.get(found_idx).ok_or_else(|| {
-            BTreeErr::node_not_found(found_idx, "search_child: Invalid node idx from client")
+        let found_clild_idx = self.cmd.next_child_idx(branch.clone()).await?;
+        let node_id = *branch.children_refs.get(found_clild_idx).ok_or_else(|| {
+            BTreeErr::node_not_found(found_clild_idx, "search_child: Invalid node idx from client")
         })?;
 
-        let child_node = self.read_node(child_id).await?.ok_or_else(|| {
-            BTreeErr::node_not_found(found_idx, "search_child: Can't find in node storage")
+        let child_node = self.read_node(node_id).await?.ok_or_else(|| {
+            BTreeErr::node_not_found(found_clild_idx, "search_child: Can't find in node storage")
         })?;
 
         Ok(FoundChild {
-            child_id,
+            child_id: node_id,
             child_node,
-            found_idx,
+            found_idx: found_clild_idx,
         })
     }
 

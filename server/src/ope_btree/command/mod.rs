@@ -81,6 +81,7 @@ pub mod tests {
             _children_hashes: Vec<Bytes>,
         ) -> RpcFuture<'f, usize> {
             let mut vec = self.next_child_idx_vec.take();
+            vec.reverse();
             let res = vec
                 .pop()
                 .expect("TestCallback.next_child_idx: index should be appeared");
@@ -96,6 +97,7 @@ pub mod tests {
             _values_hashes: Vec<Bytes>,
         ) -> RpcFuture<'f, SearchResult> {
             let mut vec = self.submit_leaf_vec.take();
+            vec.reverse();
             let res = vec
                 .pop()
                 .expect("TestCallback.submit_leaf: SearchResult should be appeared");
@@ -111,6 +113,7 @@ pub mod tests {
             values_hashes: Vec<Bytes>,
         ) -> RpcFuture<'f, ClientPutDetails> {
             let mut vec = self.put_details_vec.take();
+            vec.reverse();
             let res = vec
                 .pop()
                 .expect("TestCallback.put_details: SearchResult should be appeared");
@@ -124,6 +127,7 @@ pub mod tests {
             was_splitting: bool,
         ) -> RpcFuture<'f, Bytes> {
             let mut vec = self.verify_changes_vec.take();
+            vec.reverse();
             let res = vec
                 .pop()
                 .expect("TestCallback.verify_changes: client signed root should be appeared");
@@ -133,7 +137,7 @@ pub mod tests {
 
         fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
             async {
-                log::info!("TestCallback.changes_stored: All changes stored");
+                log::trace!("TestCallback.changes_stored: All changes stored");
                 Ok(())
             }
             .boxed()
