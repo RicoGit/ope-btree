@@ -93,9 +93,9 @@ impl LeafNode {
 
     /// Returns array of checksums for each key-value pair
     fn build_kv_hashes<D: Digest>(keys: &[Key], values: &[Hash]) -> Vec<Hash> {
-        keys.into_iter()
+        keys.iter()
             .cloned()
-            .zip(values.into_iter().cloned())
+            .zip(values.iter().cloned())
             .map(|(k, v)| {
                 let mut key: Hash = k.into();
                 key.concat(v);
@@ -279,9 +279,11 @@ impl BranchNode {
     }
 
     pub fn insert_child<D: Digest>(&mut self, key: Key, child_ref: ChildRef, ins_idx: usize) {
-        let idx = if self.is_rightmost() {
-            // todo @check, is it possible idx=-1? Should I wrap to Option?
+        let idx = if
+        /*self.is_rightmost() &&*/
+        false {
             // this child for inserting is rightmost child of rightmost parent branch, we take last branch idx as insert index
+            // todo @check, is it possible idx=-1? Should I wrap to Option?
             self.size
         } else {
             ins_idx

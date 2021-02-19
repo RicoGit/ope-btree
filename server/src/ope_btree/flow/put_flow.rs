@@ -103,7 +103,7 @@ where
 
         // makes all transformations over the copy of tree
         let (new_state_proof, put_task) = self
-            .logical_put(leaf_id, updated_leaf, put_details.idx().clone(), trail)
+            .logical_put(leaf_id, updated_leaf, put_details.idx(), trail)
             .await;
 
         // after all the logical operations, we need to send the merkle path to the client for verification
@@ -226,7 +226,7 @@ where
         } = updated;
 
         if branch.has_overflow(self.max_degree) {
-            log::debug!(
+            log::info!(
                 "Do split for branch_id={}, branch={:?}, next_child_idx={}",
                 branch_id,
                 branch,
@@ -266,33 +266,33 @@ where
                 let affected_parent_idx = if is_insert_to_left { 0 } else { 1 };
 
                 ctx.new_state_proof
-                    .add(new_parent.clone().to_proof::<D>(affected_parent_idx));
+                    .add(new_parent.to_proof::<D>(affected_parent_idx));
 
+                let mut node_to_save = ctx.put_task.nodes_to_save;
+                node_to_save.extend(vec![
+                    NodeWithId::new(left_id, Node::Branch(left)),
+                    NodeWithId::new(right_id, Node::Branch(right)),
+                    NodeWithId::new(ROOT_ID, Node::Branch(new_parent)),
+                ]);
                 PutCtx {
                     new_state_proof: ctx.new_state_proof,
                     update_parent: UpdateParent::Nothing,
-                    put_task: PutTask::new(
-                        vec![
-                            NodeWithId::new(left_id, Node::Branch(left)),
-                            NodeWithId::new(right_id, Node::Branch(right)),
-                            NodeWithId::new(ROOT_ID, Node::Branch(new_parent)),
-                        ],
-                        true,
-                        true,
-                    ),
+                    put_task: PutTask::new(node_to_save, true, true),
                 }
             } else {
                 // some regular branch was splitting
                 let left_with_id = NodeWithId::new(left_id, Node::Branch(left));
                 let right_with_id = NodeWithId::new(right_id, Node::Branch(right));
+                let mut node_to_save = ctx.put_task.nodes_to_save;
+                node_to_save.extend(vec![left_with_id.clone(), right_with_id.clone()]);
                 PutCtx {
                     new_state_proof: ctx.new_state_proof,
                     update_parent: UpdateParent::AfterChildSplitting {
-                        left: left_with_id.clone(),
-                        right: right_with_id.clone(),
+                        left: left_with_id,
+                        right: right_with_id,
                         is_insert_to_left,
                     },
-                    put_task: PutTask::new(vec![left_with_id, right_with_id], false, true),
+                    put_task: PutTask::new(node_to_save, false, true),
                 }
             }
         } else {
@@ -329,7 +329,7 @@ where
         searched_value_idx: usize,
     ) -> PutCtx {
         if new_leaf.has_overflow(self.max_degree) {
-            log::debug!("Do split for leaf_id={}, leaf={:?}", leaf_id, new_leaf);
+            log::info!("Do split for leaf_id={}, leaf={:?}", leaf_id, new_leaf);
 
             let is_root = leaf_id == ROOT_ID;
             // get ids for new nodes, right node should be with new id, because each leaf points to right sibling
@@ -347,7 +347,7 @@ where
             let (affected_leaf, affected_leaf_idx) = if is_insert_to_left {
                 (left.clone(), searched_value_idx)
             } else {
-                (right.clone(), searched_value_idx - left.size.clone())
+                (right.clone(), searched_value_idx - left.size)
             };
 
             let mut merkle_path = MerklePath::new(affected_leaf.to_proof(affected_leaf_idx));
@@ -362,7 +362,7 @@ where
                 );
                 let affected_parent_idx = if is_insert_to_left { 0 } else { 1 };
 
-                merkle_path.add(new_parent.clone().to_proof::<D>(affected_parent_idx));
+                merkle_path.add(new_parent.to_proof::<D>(affected_parent_idx));
 
                 PutCtx {
                     new_state_proof: merkle_path,
@@ -448,6 +448,8 @@ impl PutTask {
     }
 }
 
+#[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum UpdateParent {
     Nothing,
     AfterChildChanging {
@@ -523,6 +525,7 @@ impl UpdateParent {
 }
 
 /// Just a state for each recursive operation of ''logicalPut''.
+#[derive(Debug)]
 struct PutCtx {
     /// Merkle path of made changes
     pub new_state_proof: MerklePath,

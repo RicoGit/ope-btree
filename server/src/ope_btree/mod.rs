@@ -91,7 +91,7 @@ pub type NodeId = usize;
 
 /// Configuration for OpeBtree.
 pub struct OpeBTreeConf {
-    /// Maximum size of nodes (maximum number children in branches)
+    /// Maximum size of nodes (maximum number children in branches), should be even.
     pub arity: u8,
     /// Minimum capacity factor of node. Should be between 0 and 0.5. 0.25 means that
     /// each node except root should always contains between 25% and 100% children.
@@ -153,6 +153,7 @@ where
         node_store: BinaryNodeStore<NodeId, Node, Store, NumGen>,
         val_ref_gen: ValRefGen,
     ) -> Self {
+        assert_eq!(config.arity % 2, 0, "Arity should be even");
         let node_store = Arc::new(RwLock::new(node_store));
         let depth = AtomicUsize::new(0);
         let max_degree = config.arity as usize;
@@ -311,6 +312,7 @@ where
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct ValueRef(pub Bytes);
 
+#[allow(clippy::should_implement_trait)]
 impl ValueRef {
     /// Returns empty ValueRef.
     pub fn empty() -> Self {
@@ -367,7 +369,7 @@ mod tests {
     ) -> OpeBTree<Store, NoOpHasher> {
         OpeBTree::new(
             OpeBTreeConf {
-                arity: 5,
+                arity: 4,
                 alpha: 0.25_f32,
             },
             store,
@@ -442,7 +444,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
     async fn put_many_and_get_them_back_test() {
         let _ = env_logger::builder().is_test(true).try_init();
 
@@ -455,30 +456,33 @@ mod tests {
             None
         );
 
-        put_many(&mut tree).await;
+        create_3_depth_tree(&mut tree).await;
 
         // get K1
         let submit_leaf_vec = vec![SearchResult::Ok(0)];
         let cmd1 = Cmd::new(TestCallback::new(
-            vec![0, 0],
+            vec![0, 0, 0],
             submit_leaf_vec,
             vec![],
             vec![],
         ));
         let res1 = tree.get(cmd1).await.unwrap();
-        assert_eq!(res1, Some(ValueRef::from_str("\0\0\0\0\0\0\0\x11"))); // val_ref is the same as we got from put
-
-        // todo doesn't work well  after 22 elements, problem with split branch
+        assert_eq!(res1, Some(ValueRef::from_str("\0\0\0\0\0\0\0\x12"))); // val_ref is the same as we got from put
     }
 
-    async fn put_many(tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>) {
-        let number = 21;
+    async fn create_3_depth_tree(
+        tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
+    ) {
+        let number = 19;
+        // ok - number = 18 2 depth tree:
+        // [[K4][K7][K10][K13][K1V1K2V2K3V3K4V4][K5V5K6V6K7V7][K8V8K9V9K10V10][K11V11K12V12K13V13][K14V14K15V15K16V16]]]
+        // ok - number = 19 3 depth tree:
+        // [[K6][[K3][K6][K1V1K2V2K3V3][K4V4K5V5K6V6]][[K9][K12][K15][K7V7K8V8K9V9][K10V10K11V11K12V12][K13V13K14V14K15V15][K16V16K17V17K18V18]]]]
 
         let search_result_vec: Vec<usize> = vec![0; number];
-        let next_child_idx_vec: Vec<usize> = vec![0; number];
         for idx in (1..number).rev() {
             let cmd2 = Cmd::new(TestCallback::new(
-                vec![search_result_vec[idx - 1]],
+                vec![0, 0, 0],
                 vec![],
                 vec![ClientPutDetails::new(
                     format!("K{}", idx).into(),
