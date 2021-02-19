@@ -51,36 +51,42 @@ impl Digest for NoOpHasher {
     }
 
     fn finalize_reset(&mut self) -> Output<Self> {
-        let NoOpHasher {
-            wrapper,
-            end_sign,
-            data,
-        } = self;
+        // remove empty bytes
+        let mut data: Vec<u8> = self
+            .data
+            .iter()
+            .filter(|byte| **byte != self.end_sign)
+            .cloned()
+            .collect();
 
+        // add bracers [  ]
         if !data.is_empty() {
             // add closed wrapper char
-            data.extend_from_slice(wrapper.1.to_string().as_bytes());
+            data.extend_from_slice(self.wrapper.1.to_string().as_bytes());
         }
-        data.push(*end_sign);
+
         if data.len() < HASH_SIZE {
             // add zeroes to and of the vector. 'data' must have size == HASH_SIZE!
             let num = HASH_SIZE - data.len();
             for _ in 0..num {
-                data.push(b'_')
+                data.push(self.end_sign)
             }
         }
 
         if data.len() > HASH_SIZE {
-            // 'data' must have size == HASH_SIZE !
-            data.truncate(HASH_SIZE)
+            // takes first 256 and last 253 bytes.
+            let tail = data[256..HASH_SIZE - 1].to_vec();
+            data.truncate(254);
+            data.extend(b"...");
+            data.extend(tail);
         }
 
-        let data = data.clone();
+        let len = data.len();
         self.reset();
 
         GenericArray::from_exact_iter(data.into_iter()).expect(&format!(
-            "NoOpHasher::result() failed, cause data must to have size={}",
-            HASH_SIZE
+            "NoOpHasher::result() failed, cause data must to have size={}, actually={}",
+            HASH_SIZE, len
         ))
     }
 

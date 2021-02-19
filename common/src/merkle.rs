@@ -197,7 +197,16 @@ mod tests {
             .clone()
             .calc_checksum::<NoOpHasher>(Some(Hash::from_str("#new#")));
 
-        assert_eq!(result.to_string(), "Hash[24, [StateChild1#new#Child3]]")
+        assert_eq!(result.to_string(), "Hash[512, [StateChild1#new#Child3]]")
+    }
+
+    #[test]
+    fn node_proof_checksum_noop_hasher_without_substitution_test() {
+        // Calculate checksum of nodeProof without substitution (noop hasher)
+        let proof = node_proof("State");
+        let result = proof.clone().calc_checksum::<NoOpHasher>(None);
+
+        assert_eq!(result.to_string(), "Hash[512, [StateChild1Child2Child3]]")
     }
 
     #[test]
@@ -265,7 +274,8 @@ mod tests {
         let result = m_path.calc_merkle_root::<NoOpHasher>(Some(Hash::from_str("#new#")));
         assert_eq!(
             result.to_string(),
-            "Hash[51, [Proof1Child1[Proof2Child1[Proof3Child1#new#Child3]]".to_string()
+            "Hash[512, [Proof1Child1[Proof2Child1[Proof3Child1#new#Child3]Child3]Child3]]"
+                .to_string()
         )
     }
 
@@ -276,7 +286,8 @@ mod tests {
         let result = m_path.calc_merkle_root::<NoOpHasher>(None);
         assert_eq!(
             result.to_string(),
-            "Hash[52, [Proof1Child1[Proof2Child1[Proof3Child1Child2Child3]]".to_string()
+            "Hash[512, [Proof1Child1[Proof2Child1[Proof3Child1Child2Child3]Child3]Child3]]"
+                .to_string()
         )
     }
 

@@ -7,13 +7,13 @@ pub mod misc;
 pub mod noop_hasher;
 
 use crate::misc::AsString;
-use bytes::{Bytes, BytesMut};
-use misc::ToBytes;
+use bytes::{BufMut, Bytes, BytesMut};
+
 use serde::{Deserialize, Serialize};
 use sha3::digest::generic_array::ArrayLength;
 use sha3::digest::generic_array::GenericArray;
 pub use sha3::Digest;
-use std::fmt::{Display, Formatter, Debug};
+use std::fmt::{Debug, Display, Formatter};
 
 pub const STR_END_SIGN: u8 = 0_u8;
 
@@ -60,8 +60,7 @@ impl Hash {
 
     /// Adds the specified hash to self as a tail.
     pub fn concat(&mut self, hash: Hash) {
-        let this = &mut self.0;
-        this.extend(hash.bytes());
+        self.0.put(hash.0)
     }
 
     /// Adds all specified hashes to self as a tail.
@@ -93,14 +92,14 @@ impl AsRef<[u8]> for Hash {
 impl Display for Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = self.as_str().unwrap_or_else(|_| "[]".to_string());
-        write!(f, "Hash[{}, {}]", str.len(), str)
+        write!(f, "Hash[{}, {}]", self.0.len(), str)
     }
 }
 
 impl Debug for Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = self.as_str().unwrap_or_else(|_| "[]".to_string());
-        write!(f, "Hash[{}, {}]", str.len(), str)
+        write!(f, "Hash[{}, {}]", self.0.len(), str)
     }
 }
 
@@ -122,7 +121,7 @@ mod tests {
     #[test]
     fn hash_build_test() {
         let test_hash = Hash::build::<NoOpHasher, _>("test");
-        assert_eq!(test_hash.to_string(), "Hash[6, [test]]");
+        assert_eq!(test_hash.to_string(), "Hash[512, [test]]");
 
         let bin_hash = Hash::build::<Sha3_256, _>("test");
         let expected =
@@ -182,6 +181,9 @@ mod tests {
         let mut input = Hash::from_str("start");
         input.0.put_u8(STR_END_SIGN);
         input.concat(Hash::from_str("end"));
-        assert_eq!(format!("{}", input), "Hash[5, start]")
+        assert_eq!(input.to_string(), "Hash[9, start]");
+
+        let hash = Hash::build::<NoOpHasher, _>("test");
+        assert_eq!(hash.to_string(), "Hash[512, [test]]");
     }
 }

@@ -70,7 +70,11 @@ where
             match current_node {
                 Node::Leaf(leaf) => return self.put_for_leaf(current_node_id, leaf, trail).await,
                 Node::Branch(branch) => {
-                    log::debug!("PutFlow: Put for branch_id={}, branch {:?}", current_node_id, &branch);
+                    log::debug!(
+                        "PutFlow: Put for branch_id={}, branch {:?}",
+                        current_node_id,
+                        &branch
+                    );
 
                     let res = get_flow.search_child(branch.clone()).await?;
                     trail.push(current_node_id, branch, res.found_idx);

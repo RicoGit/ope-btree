@@ -74,17 +74,13 @@ impl LeafNode {
     }
 
     /// Create new leaf with specified ''key'' and ''value''
-    pub fn new<D: Digest>(
-        key: Key,
-        value_ref: ValueRef,
-        value_hash: Hash,
-    ) -> Result<LeafNode, MerkleError> {
+    pub fn new<D: Digest>(key: Key, value_ref: ValueRef, value_hash: Hash) -> Self {
         let keys = vec![key];
         let values_refs = vec![value_ref];
         let values_hashes = vec![value_hash];
         let kv_hashes = LeafNode::build_kv_hashes::<D>(&keys, &values_hashes);
         let hash = LeafNode::leaf_hash::<D>(kv_hashes.clone());
-        let leaf = LeafNode {
+        LeafNode {
             keys,
             val_refs: values_refs,
             val_hashes: values_hashes,
@@ -92,9 +88,7 @@ impl LeafNode {
             size: 1,
             hash,
             right_sibling: None,
-        };
-
-        Ok(leaf)
+        }
     }
 
     /// Returns array of checksums for each key-value pair
@@ -180,7 +174,12 @@ impl LeafNode {
 
     /// Splits current LeafNode
     pub fn split<D: Digest>(self, right_leaf_id: NodeId) -> (Self, Self) {
-        assert_ne!(self.size % 2, 1, "Leaf size before splitting should be odd!");
+        assert_eq!(
+            self.size % 2,
+            1,
+            "Leaf size before splitting should be odd, but size={}",
+            self.size
+        );
 
         let split_idx = self.size / 2;
         let (left_keys, right_keys) = self.keys.split_at(split_idx);
@@ -245,7 +244,7 @@ impl BranchNode {
     }
 
     /// Creates new branch node with specified ''key'' and 2 child nodes
-    pub fn new<D: Digest>(key: Key, left_child: ChildRef, right_child: ChildRef) -> BranchNode {
+    pub fn new<D: Digest>(key: Key, left_child: ChildRef, right_child: ChildRef) -> Self {
         let keys = vec![key];
         let children_refs = vec![left_child.id, right_child.id];
         let children_hashes = vec![left_child.checksum, right_child.checksum];
@@ -261,7 +260,6 @@ impl BranchNode {
 
     /// Returns checksum of branch node
     pub fn branch_hash<D: Digest>(keys: Vec<Key>, children_hashes: Vec<Hash>) -> Hash {
-        // todo double @check this, i'm not sure
         NodeProof::new_proof::<D>(keys, children_hashes, None).calc_checksum::<D>(None)
     }
 
@@ -270,7 +268,7 @@ impl BranchNode {
     }
 
     pub fn update_child_checksum<D: Digest>(&mut self, new_child_hash: Hash, idx: usize) {
-        misc::replace(&mut self.children_hashes.clone(), new_child_hash, idx);
+        misc::replace(&mut self.children_hashes, new_child_hash, idx);
         self.hash = BranchNode::branch_hash::<D>(self.keys.clone(), self.children_hashes.clone());
     }
 
@@ -429,12 +427,16 @@ pub mod tests {
     use common::noop_hasher::NoOpHasher;
     use common::Hash;
 
-    use crate::ope_btree::internal::node::BranchNode;
     use crate::ope_btree::internal::node::LeafNode;
     use crate::ope_btree::internal::node::Node;
+    use crate::ope_btree::internal::node::{BranchNode, ChildRef};
 
     use super::Key;
     use super::ValueRef;
+
+    //
+    // Leaf tests
+    //
 
     #[test]
     fn leaf_serde_test() {
@@ -447,31 +449,45 @@ pub mod tests {
     }
 
     #[test]
-    fn branch_serde_test() {
-        let branch = create_branch();
-        let mut buf = Vec::new();
-        branch.serialize(&mut Serializer::new(&mut buf)).unwrap();
-
-        let mut de = Deserializer::new(&buf[..]);
-        assert_eq!(branch, Deserialize::deserialize(&mut de).unwrap());
-    }
-
-    #[test]
-    fn create_test() {
+    fn leaf_create_test() {
         let k1 = Key::from_str("k1");
         let r1 = ValueRef::from_str("r1");
         let h1 = Hash::from_str("h1");
-        let leaf = LeafNode::new::<NoOpHasher>(k1.clone(), r1.clone(), h1.clone()).unwrap();
+        let leaf = LeafNode::new::<NoOpHasher>(k1.clone(), r1.clone(), h1.clone());
         assert_eq!(leaf.keys, vec![k1]);
         assert_eq!(leaf.val_refs, vec![r1]);
         assert_eq!(leaf.val_hashes, vec![h1]);
         assert_eq!(leaf.size, 1);
         assert_eq!(leaf.kv_hashes, vec![Hash::from_str("k1h1")]);
-        assert_eq!(leaf.hash.to_string(), "Hash[6, [k1h1]]");
+        assert_eq!(leaf.hash.to_string(), "Hash[512, [k1h1]]");
     }
 
     #[test]
-    fn update_test() {
+    fn leaf_build_kv_hashes_test() {
+        let leaf = create_leaf();
+        let kv_res = LeafNode::build_kv_hashes::<NoOpHasher>(&leaf.keys, &leaf.val_hashes);
+        assert_eq!(kv_res, vec![Hash::from_str("k1h1"), Hash::from_str("k2h2")]);
+
+        let empty = LeafNode::build_kv_hashes::<NoOpHasher>(&[], &[]);
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn leaf_hash_test() {
+        let leaf = create_leaf();
+        let kv_res = LeafNode::build_kv_hashes::<NoOpHasher>(&leaf.keys, &leaf.val_hashes);
+        let hash = LeafNode::leaf_hash::<NoOpHasher>(kv_res);
+        assert_eq!(hash.to_string(), "Hash[512, [k1h1k2h2]]");
+    }
+
+    #[test]
+    #[should_panic]
+    fn leaf_hash_empty_test() {
+        LeafNode::leaf_hash::<NoOpHasher>(vec![]);
+    }
+
+    #[test]
+    fn leaf_update_test() {
         let leaf = create_leaf();
         let k = Key::from_str("k#");
         let r = ValueRef::from_str("r#");
@@ -486,11 +502,11 @@ pub mod tests {
             leaf.kv_hashes,
             vec![Hash::from_str("k1h1"), Hash::from_str("k#h#")]
         );
-        assert_eq!(leaf.hash.to_string(), "Hash[10, [k1h1k#h#]]");
+        assert_eq!(leaf.hash.to_string(), "Hash[512, [k1h1k#h#]]");
     }
 
     #[test]
-    fn insert_test() {
+    fn leaf_insert_test() {
         let leaf = create_leaf();
         let k = Key::from_str("k#");
         let r = ValueRef::from_str("r#");
@@ -515,7 +531,38 @@ pub mod tests {
                 Hash::from_str("k2h2")
             ]
         );
-        assert_eq!(leaf.hash.to_string(), "Hash[14, [k1h1k#h#k2h2]]");
+        assert_eq!(leaf.hash.to_string(), "Hash[512, [k1h1k#h#k2h2]]");
+    }
+
+    #[test]
+    fn leaf_split_test() {
+        let leaf = create_big_leaf();
+        let (left, right) = leaf.split::<NoOpHasher>(42);
+
+        assert_eq!(left.keys, vec![Key::from_str("k1")]);
+        assert_eq!(left.val_hashes, vec![Hash::from_str("h1")]);
+        assert_eq!(left.val_refs, vec![ValueRef::from_str("r1")]);
+        assert_eq!(left.size, 1);
+        assert_eq!(left.kv_hashes, vec![Hash::from_str("k1h1")]);
+        assert_eq!(left.hash.to_string(), "Hash[512, [k1h1]]");
+        assert_eq!(left.right_sibling, Some(42));
+
+        assert_eq!(right.keys, vec![Key::from_str("k2"), Key::from_str("k3")]);
+        assert_eq!(
+            right.val_hashes,
+            vec![Hash::from_str("h2"), Hash::from_str("h3")]
+        );
+        assert_eq!(
+            right.val_refs,
+            vec![ValueRef::from_str("r2"), ValueRef::from_str("r3")]
+        );
+        assert_eq!(right.size, 2);
+        assert_eq!(
+            right.kv_hashes,
+            vec![Hash::from_str("k2h2"), Hash::from_str("k3h3")]
+        );
+        assert_eq!(right.hash.to_string(), "Hash[512, [k2h2k3h3]]");
+        assert_eq!(right.right_sibling, Some(5));
     }
 
     pub fn create_leaf() -> LeafNode {
@@ -523,23 +570,199 @@ pub mod tests {
             keys: vec![Key::from_str("k1"), Key::from_str("k2")],
             val_refs: vec![ValueRef::from_str("r1"), ValueRef::from_str("r2")],
             val_hashes: vec![Hash::from_str("h1"), Hash::from_str("h2")],
-            kv_hashes: vec![Hash::from_str("k1v1"), Hash::from_str("k2v2")],
+            kv_hashes: vec![Hash::from_str("k1h1"), Hash::from_str("k2h2")],
             size: 2,
-            hash: Hash(BytesMut::from("[k1v1k2v2]")),
+            hash: Hash(BytesMut::from("[k1h1k2h2]")),
             right_sibling: None,
         }
     }
 
+    pub fn create_big_leaf() -> LeafNode {
+        LeafNode {
+            keys: vec![
+                Key::from_str("k1"),
+                Key::from_str("k2"),
+                Key::from_str("k3"),
+            ],
+            val_refs: vec![
+                ValueRef::from_str("r1"),
+                ValueRef::from_str("r2"),
+                ValueRef::from_str("r3"),
+            ],
+            val_hashes: vec![
+                Hash::from_str("h1"),
+                Hash::from_str("h2"),
+                Hash::from_str("h3"),
+            ],
+            kv_hashes: vec![
+                Hash::from_str("k1h1"),
+                Hash::from_str("k2h2"),
+                Hash::from_str("k3h3"),
+            ],
+            size: 3,
+            hash: Hash(BytesMut::from("[k1h1k2h2k3h3]")),
+            right_sibling: Some(5),
+        }
+    }
+
+    //
+    // Branch tests
+    //
+
+    #[test]
+    fn branch_serde_test() {
+        let branch = create_branch();
+        let mut buf = Vec::new();
+        branch.serialize(&mut Serializer::new(&mut buf)).unwrap();
+
+        let mut de = Deserializer::new(&buf[..]);
+        assert_eq!(branch, Deserialize::deserialize(&mut de).unwrap());
+    }
+
+    #[test]
+    fn branch_create_test() {
+        let k1 = Key::from_str("k1");
+        let h1 = Hash::from_str("h1");
+        let left = ChildRef::new(1, h1.clone());
+        let h2 = Hash::from_str("h2");
+        let right = ChildRef::new(2, h2.clone());
+        let branch = BranchNode::new::<NoOpHasher>(k1.clone(), left, right);
+
+        assert_eq!(branch.keys, vec![k1]);
+        assert_eq!(branch.children_refs, vec![1, 2]);
+        assert_eq!(branch.children_hashes, vec![h1, h2]);
+        assert_eq!(branch.size, 1);
+        assert_eq!(branch.hash.to_string(), "Hash[512, [[k1]h1h2]]");
+    }
+
+    #[test]
+    fn branch_hash_test() {
+        let branch = create_branch();
+        let keys = vec![Key::from_str("k1"), Key::from_str("k2")];
+        let children = vec![
+            Hash::from_str("h1"),
+            Hash::from_str("h2"),
+            Hash::from_str("h3"),
+        ];
+        let hash = BranchNode::branch_hash::<NoOpHasher>(keys, children);
+        assert_eq!(hash.to_string(), "Hash[512, [[k1][k2]h1h2h3]]")
+    }
+
+    #[test]
+    fn branch_update_child_checksum_test() {
+        let mut branch = create_branch();
+        branch.update_child_checksum::<NoOpHasher>(Hash::from_str("h#"), 1);
+        assert_eq!(
+            branch.children_hashes,
+            vec![
+                Hash::from_str("h1"),
+                Hash::from_str("h#"),
+                Hash::from_str("h3"),
+            ]
+        );
+        assert_eq!(branch.hash.to_string(), "Hash[512, [[k1][k2]h1h#h3]]");
+    }
+
+    #[test]
+    fn branch_update_child_ref_test() {
+        let mut branch = create_branch();
+        branch.update_child_ref::<NoOpHasher>(ChildRef::new(10, Hash::from_str("h#")), 0);
+        assert_eq!(branch.children_refs, vec![10, 2, 3]);
+        assert_eq!(
+            branch.children_hashes,
+            vec![
+                Hash::from_str("h#"),
+                Hash::from_str("h2"),
+                Hash::from_str("h3"),
+            ]
+        );
+        assert_eq!(branch.hash.to_string(), "Hash[512, [[k1][k2]h#h2h3]]");
+    }
+
+    #[test]
+    fn branch_insert_child_test() {
+        let mut branch = create_branch();
+        let k = Key::from_str("k#");
+        let h = Hash::from_str("h#");
+
+        branch.insert_child::<NoOpHasher>(k.clone(), ChildRef::new(42, h.clone()), 2);
+
+        assert_eq!(
+            branch.keys,
+            vec![Key::from_str("k1"), Key::from_str("k2"), k,]
+        );
+        assert_eq!(branch.children_refs, vec![1, 2, 42, 3]);
+        assert_eq!(
+            branch.children_hashes,
+            vec![
+                Hash::from_str("h1"),
+                Hash::from_str("h2"),
+                h,
+                Hash::from_str("h3"),
+            ]
+        );
+        assert_eq!(branch.size, 3);
+        assert_eq!(branch.hash.to_string(), "Hash[512, [[k1][k2][k#]h1h2h#h3]]");
+    }
+
+    #[test]
+    fn branch_split_test() {
+        let branch = create_big_branch();
+        let (left, right) = branch.split::<NoOpHasher>();
+
+        assert_eq!(left.keys, vec![Key::from_str("k1"), Key::from_str("k2"),]);
+        assert_eq!(left.children_refs, vec![1, 2]);
+        assert_eq!(
+            left.children_hashes,
+            vec![Hash::from_str("h1"), Hash::from_str("h2"),]
+        );
+        assert_eq!(left.size, 2);
+        assert_eq!(left.hash.to_string(), "Hash[512, [[k1][k2]h1h2]]");
+
+        assert_eq!(right.keys, vec![Key::from_str("k3"), Key::from_str("k4"),]);
+        assert_eq!(right.children_refs, vec![3, 4, 5]);
+        assert_eq!(
+            right.children_hashes,
+            vec![
+                Hash::from_str("h3"),
+                Hash::from_str("h4"),
+                Hash::from_str("h5"),
+            ]
+        );
+        assert_eq!(right.size, 2);
+        assert_eq!(right.hash.to_string(), "Hash[512, [[k3][k4]h3h4h5]]");
+    }
+
     pub fn create_branch() -> BranchNode {
         BranchNode {
-            keys: vec![Key(BytesMut::from("key1")), Key(BytesMut::from("key2"))],
-            children_refs: vec![1, 2],
+            keys: vec![Key::from_str("k1"), Key::from_str("k2")],
+            children_refs: vec![1, 2, 3],
             size: 2,
-            hash: Hash(BytesMut::from("leaf_hash")),
+            hash: Hash::from_str("leaf_hash"),
             children_hashes: vec![
-                Hash(BytesMut::from("child_hash1")),
-                Hash(BytesMut::from("child_hash2")),
+                Hash::from_str(r"h1"),
+                Hash::from_str("h2"),
+                Hash::from_str("h3"),
             ],
         }
+    }
+
+    pub fn create_big_branch() -> BranchNode {
+        let number = 5;
+        let mut branch = BranchNode::empty();
+        for idx in 1..number {
+            branch.keys.push(Key::from_str(&format!("k{}", idx)));
+            branch.children_refs.push(idx);
+            branch
+                .children_hashes
+                .push(Hash::from_str(&format!("h{}", idx)));
+        }
+        branch.children_refs.push(number);
+        branch
+            .children_hashes
+            .push(Hash::from_str(&format!("h{}", number)));
+        branch.size = number;
+        branch.hash = Hash::from_str("leaf_hash");
+        branch
     }
 }
