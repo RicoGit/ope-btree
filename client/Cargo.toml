@@ -5,3 +5,10 @@ authors = ["Constantine Solovev <constantine.solovev@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+
+protocol = { path = "../protocol" }
+
+thiserror = "1.0"
+bytes = "1.0"
+serde = "1.0"
+rmp-serde = "0.13.7"
