@@ -3,14 +3,7 @@
 pub mod put_cmd;
 pub mod search_cmd;
 
-use super::internal::node::BranchNode;
-use crate::ope_btree::internal::node::LeafNode;
-use common::merkle::MerklePath;
-use protocol::{BtreeCallback, ClientPutDetails, SearchCallback, SearchResult};
 use thiserror::Error;
-
-use futures::future::BoxFuture;
-use std::future::Future;
 
 #[derive(Error, Debug)]
 #[error("Command Error")]
@@ -35,10 +28,12 @@ impl<Cb> Cmd<Cb> {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+
     use bytes::Bytes;
     use futures::FutureExt;
-    use protocol::{PutCallbacks, RpcFuture};
+    use protocol::{
+        BtreeCallback, ClientPutDetails, PutCallbacks, RpcFuture, SearchCallback, SearchResult,
+    };
     use std::cell::RefCell;
 
     /// Stub Callback for testing
@@ -109,8 +104,8 @@ pub mod tests {
     impl PutCallbacks for TestCallback {
         fn put_details<'f>(
             &self,
-            keys: Vec<Bytes>,
-            values_hashes: Vec<Bytes>,
+            _keys: Vec<Bytes>,
+            _values_hashes: Vec<Bytes>,
         ) -> RpcFuture<'f, ClientPutDetails> {
             let mut vec = self.put_details_vec.take();
             vec.reverse();
@@ -123,8 +118,8 @@ pub mod tests {
 
         fn verify_changes<'f>(
             &self,
-            server_merkle_root: Bytes,
-            was_splitting: bool,
+            _server_merkle_root: Bytes,
+            _was_splitting: bool,
         ) -> RpcFuture<'f, Bytes> {
             let mut vec = self.verify_changes_vec.take();
             vec.reverse();

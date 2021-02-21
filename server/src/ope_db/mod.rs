@@ -2,13 +2,9 @@
 //! as backend for persisting data.
 
 use crate::ope_btree::command::Cmd;
-use crate::ope_btree::internal::node::Node;
-use crate::ope_btree::internal::node_store::BinaryNodeStore;
-use crate::ope_btree::{BTreeErr, OpeBTree, ValueRef};
+use crate::ope_btree::{BTreeErr, OpeBTree};
 use bytes::Bytes;
-use common::misc::ToBytes;
 use common::Digest;
-use futures::{Future, TryStreamExt};
 use kvstore_api::kvstore::KVStore;
 use kvstore_api::kvstore::*;
 use protocol::SearchCallback;
@@ -92,6 +88,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ope_btree::internal::node::Node;
+    use crate::ope_btree::internal::node_store::BinaryNodeStore;
     use crate::ope_btree::{OpeBTreeConf, ValRefGen};
     use common::gen::NumGen;
     use common::noop_hasher::NoOpHasher;
@@ -106,7 +104,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_test() {
-        let db = create_db().await;
+        let _db = create_db().await;
         // todo test later
     }
 

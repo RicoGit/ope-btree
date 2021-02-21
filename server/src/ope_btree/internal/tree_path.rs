@@ -1,5 +1,4 @@
 use crate::ope_btree::internal::node::BranchNode;
-use crate::ope_btree::NodeId;
 use common::{Digest, Hash};
 
 /// Path traversed from the root to a leaf (leaf is excluded). Contains all the information you need

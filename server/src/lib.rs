@@ -1,11 +1,8 @@
-//! todo docs
+//!
+//! todo docs and examples
+//!
 
-// todo remove 'allow'
-#![allow(unused_imports)]
-#![allow(dead_code)]
-#![allow(unused_variables)]
-
-extern crate rmp_serde as rmps;
+#![allow(dead_code)] // todo remove later
 
 // Order-preserving encryption Btree implementation
 pub mod ope_btree;

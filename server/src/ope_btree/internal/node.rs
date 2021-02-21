@@ -1,12 +1,9 @@
 //! Implementation of Btree node.
 
-use std::ops::Deref;
-use std::ptr::replace;
-
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-use common::merkle::{MerkleError, NodeProof};
+use common::merkle::NodeProof;
 use common::misc::ToBytes;
 use common::{misc, Digest, Hash, Key};
 
@@ -422,15 +419,15 @@ impl<T: ToBytes + Clone> AsBytes for Vec<T> {
 
 #[cfg(test)]
 pub mod tests {
-    use bytes::{Bytes, BytesMut};
-    use rmps::{Deserializer, Serializer};
+    use bytes::BytesMut;
+    use rmp_serde::{Deserializer, Serializer};
     use serde::{Deserialize, Serialize};
 
     use common::noop_hasher::NoOpHasher;
     use common::Hash;
 
     use crate::ope_btree::internal::node::LeafNode;
-    use crate::ope_btree::internal::node::Node;
+
     use crate::ope_btree::internal::node::{BranchNode, ChildRef};
 
     use super::Key;
@@ -639,7 +636,7 @@ pub mod tests {
 
     #[test]
     fn branch_hash_test() {
-        let branch = create_branch();
+        let _branch = create_branch();
         let keys = vec![Key::from_str("k1"), Key::from_str("k2")];
         let children = vec![
             Hash::from_str("h1"),

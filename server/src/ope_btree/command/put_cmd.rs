@@ -35,7 +35,7 @@ impl<Cb: PutCallbacks> Cmd<Cb> {
         was_splitting: bool,
     ) -> Result<()> {
         let merkle_root = merkle_path.calc_merkle_root::<D>(None).bytes();
-        let res = self.cb.verify_changes(merkle_root, was_splitting).await?;
+        let _ = self.cb.verify_changes(merkle_root, was_splitting).await?;
         self.cb.changes_stored().await?;
         Ok(())
     }

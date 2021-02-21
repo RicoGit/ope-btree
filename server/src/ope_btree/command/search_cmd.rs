@@ -1,13 +1,8 @@
-use bytes::Bytes;
-use futures::future::TryFuture;
-use futures::TryFutureExt;
-
 use protocol::BtreeCallback;
 use protocol::SearchCallback;
 use protocol::SearchResult;
 
 use crate::ope_btree::command::Cmd;
-use crate::ope_btree::command::CmdError;
 use crate::ope_btree::command::Result;
 use crate::ope_btree::internal::node::AsBytes;
 use crate::ope_btree::internal::node::BranchNode;

@@ -1,36 +1,26 @@
 //! BTree implementation.
 //! todo more documentation when btree will be ready
 
-use std::convert::TryInto;
-use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use crate::ope_btree::command::{Cmd, CmdError};
+use crate::ope_btree::internal::node::{LeafNode, Node, NodeWithId};
+use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
+use crate::ope_btree::internal::tree_path::TreePath;
 use bytes::Bytes;
-use futures::future::BoxFuture;
-use futures::{FutureExt, TryFutureExt};
-use kvstore_api::kvstore::KVStore;
-use kvstore_binary::BinKVStore;
-use rmps::{Deserializer, Serializer};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
-
 use common::gen::{Generator, NumGen};
 use common::merkle::{MerkleError, MerklePath, NodeProof};
 use common::misc::ToBytes;
-use common::{Digest, Hash, Key};
+use common::{Digest, Hash};
 use flow::get_flow::GetFlow;
 use flow::put_flow::{PutFlow, PutTask};
-use protocol::{
-    BtreeCallback, ClientPutDetails, ProtocolError, PutCallbacks, SearchCallback, SearchResult,
-};
-
-use crate::ope_btree::command::{Cmd, CmdError};
-use crate::ope_btree::internal::node::{BranchNode, LeafNode, Node, NodeWithId};
-use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
-use crate::ope_btree::internal::tree_path::TreePath;
+use kvstore_api::kvstore::KVStore;
+use protocol::{ProtocolError, PutCallbacks, SearchCallback};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tokio::sync::{Mutex, RwLock};
 
 pub mod command;
 pub mod flow;
@@ -353,7 +343,6 @@ mod tests {
 
     use crate::ope_btree::command::tests::TestCallback;
     use crate::ope_btree::command::Cmd;
-    use crate::ope_btree::BTreeErr::IllegalStateErr;
 
     use super::*;
 
@@ -397,7 +386,6 @@ mod tests {
         // Get from empty tree return None
         let tree = empty_tree().await;
 
-        let cmd = Cmd::new(TestCallback::empty());
         let res1 = tree.get(Cmd::new(TestCallback::empty())).await;
         assert_eq!(res1.unwrap(), None);
 

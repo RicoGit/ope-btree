@@ -1,11 +1,8 @@
 //! OpeBtree Rpc protocol.
 
-#![allow(dead_code)] // todo remove later
-
-use std::result;
-
 use bytes::Bytes;
 use futures::future::BoxFuture;
+use std::result;
 use thiserror::Error;
 
 /// Protocol errors

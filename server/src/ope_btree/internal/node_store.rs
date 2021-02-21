@@ -1,23 +1,12 @@
 //! BTree persistence store.
 //! todo add docs later
 
-use futures::{future, StreamExt, TryFutureExt};
-use rmp_serde::decode;
-use rmp_serde::encode;
-use rmps::{Deserializer, Serializer};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::ops::Add;
-
 use common::gen::Generator;
-use futures::future::BoxFuture;
 use kvstore_api::kvstore::*;
-use kvstore_api::*;
 use kvstore_binary::BinKVStore;
-use kvstore_inmemory::hashmap_store::HashMapKVStore;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use std::fmt::Debug;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -78,6 +67,7 @@ mod tests {
     use crate::ope_btree::internal::node::tests as node_test;
     use crate::ope_btree::internal::node::Node;
     use common::gen::NumGen;
+    use kvstore_inmemory::hashmap_store::HashMapKVStore;
     use std::sync::Arc;
 
     #[test]

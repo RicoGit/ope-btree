@@ -72,9 +72,17 @@ impl NodeProof {
         children_hashes: Vec<Hash>,
         substitution_idx: Option<usize>,
     ) -> Self {
+        NodeProof::new(
+            NodeProof::calc_keys_hash::<D>(keys),
+            children_hashes,
+            substitution_idx,
+        )
+    }
+
+    pub fn calc_keys_hash<D: Digest>(keys: Vec<Key>) -> Hash {
         let mut hash = Hash::empty();
         hash.concat_all(keys.into_iter().map(|key| Hash::build::<D, _>(key.bytes())));
-        NodeProof::new(hash, children_hashes, substitution_idx)
+        hash
     }
 
     /// Calculates a checksum (hash) for the current node proof and the substituted value.
@@ -142,6 +150,13 @@ impl MerklePath {
         self.0.push(proof);
     }
 
+    /// Returns child's hash for substitution index from last proof
+    pub fn last_proof_children_hash(&self) -> Option<&Hash> {
+        let proof = self.0.last()?;
+        let idx = proof.substitution_idx?;
+        proof.children_hashes.get(idx)
+    }
+
     /// Calculates new merkle root from merkle path. Folds merkle path from the right to the left and
     /// calculate merkle tree root. Inserts ''substituted_checksum'' into element in last position in merkle path.
     /// Substitution into the last element occurs at the substitution idx of this element.
@@ -158,6 +173,10 @@ impl MerklePath {
                 .map(|cs| Hash::build::<D, _>(cs).into())
                 .unwrap_or_default()
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
