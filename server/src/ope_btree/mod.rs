@@ -17,7 +17,7 @@ use common::{Digest, Hash};
 use flow::get_flow::GetFlow;
 use flow::put_flow::{PutFlow, PutTask};
 use kvstore_api::kvstore::KVStore;
-use protocol::{ProtocolError, PutCallbacks, SearchCallback};
+use protocol::{BtreeCallback, ProtocolError, PutCallbacks, SearchCallback};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
@@ -179,10 +179,18 @@ where
         Ok(())
     }
 
-    //
-    // Get
-    //
-
+    /// === GET ===
+    ///
+    /// We are looking for a specified key in this B+Tree.
+    /// Starting from the root, we are looking for some leaf which needed to the
+    /// BTree client. We using `search_callback` for communication with client.
+    /// While visiting each node we figure out which internal pointer we should follow.
+    /// Get have O(log<sub>arity</sub>n) algorithmic complexity.
+    ///
+    /// `search_callback` A command for BTree execution (it's a 'bridge' for
+    /// communicate with BTree client)
+    ///   Returns reference to value that corresponds search Key, or None if Key
+    /// was not found in tree
     pub async fn get<Cb>(&self, cmd: Cmd<Cb>) -> Result<Option<ValueRef>>
     where
         Cb: SearchCallback,
@@ -194,18 +202,40 @@ where
         flow.get_for_node(root).await
     }
 
-    //
-    // Put
-    //
-
+    /// === PUT ===
+    ///
+    /// Starting from the root, we are looking for some place for putting key
+    /// and value in this B+Tree. We're using `put_callback` for communication
+    /// with client. At each node, we figure out which internal pointer we
+    /// should follow. When we go down the tree we put each visited node to
+    /// 'Trail'(see [`TreePath`]) in the same order. Trail is just a array of
+    /// all visited nodes from root to leaf. When we found slot for insertion
+    /// we do all tree transformation in logical copy of sector of tree;
+    /// actually 'Trail' is this copy - copy of visited nodes that will be
+    /// changed after insert. We insert new 'key' and 'value' and split leaf
+    /// if leaf is full. We also split leaf parent if parent is filled and so on
+    /// to the root of the BTree. Also after changing leaf we should re-calculate
+    /// merkle root and update checksums of all visited nodes. Absolutely all
+    /// tree's transformations are performed on copies and don't change the tree.
+    /// When all transformation in logical state ended we commit changes (see method
+    /// 'commit_new_state').
+    /// Put have O(log,,arity,,n) algorithmic complexity.
+    ///
+    /// `cmd` A command for BTree execution (it's a 'bridge' for
+    /// communicate with BTree client)
+    ///
+    /// Returns reference to value that corresponds search Key. In update case
+    /// will be returned old reference, in insert case will be created new
+    /// reference to value
     pub async fn put<Cb>(&mut self, cmd: Cmd<Cb>) -> Result<ValueRef>
     where
-        Cb: PutCallbacks + SearchCallback + Clone,
+        Cb: PutCallbacks + BtreeCallback + Clone,
     {
         log::debug!("Put starts");
 
         let root = self.get_root().await?;
 
+        // todo verify changes in simple case
         if root.is_empty() {
             // if root is empty don't need to finding slot for putting
             log::debug!("Root node is empty, put in Root node");
@@ -247,16 +277,16 @@ where
         }
     }
 
+    /// Gets or creates root node
+    pub async fn get_root(&self) -> Result<Node> {
+        let node = self.read_node(ROOT_ID).await?;
+        node.ok_or_else(|| BTreeErr::illegal_state("Root not isn't exists"))
+    }
+
     /// Generates new btree node reference
     async fn next_node_ref(&self) -> NodeId {
         let mut store = self.node_store.write().await;
         store.next_id()
-    }
-
-    /// Gets or creates root node
-    async fn get_root(&self) -> Result<Node> {
-        let node = self.read_node(ROOT_ID).await?;
-        node.ok_or_else(|| BTreeErr::illegal_state("Root not isn't exists"))
     }
 
     pub(self) async fn read_node(&self, node_id: NodeId) -> Result<Option<Node>> {

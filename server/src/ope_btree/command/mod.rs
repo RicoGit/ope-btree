@@ -3,6 +3,7 @@
 pub mod put_cmd;
 pub mod search_cmd;
 
+use bytes::Bytes;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -18,11 +19,16 @@ pub type Result<V> = std::result::Result<V, CmdError>;
 #[derive(Debug, Clone)]
 pub struct Cmd<Cb> {
     pub cb: Cb,
+    /// Signed by client new BTree state
+    pub state_signed_by_client: Option<Bytes>,
 }
 
 impl<Cb> Cmd<Cb> {
     pub fn new(cb: Cb) -> Self {
-        Cmd { cb }
+        Cmd {
+            cb,
+            state_signed_by_client: None,
+        }
     }
 }
 

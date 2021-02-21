@@ -7,7 +7,7 @@ use bytes::Bytes;
 use common::Digest;
 use kvstore_api::kvstore::KVStore;
 use kvstore_api::kvstore::*;
-use protocol::SearchCallback;
+use protocol::{BtreeCallback, PutCallbacks, SearchCallback};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -59,18 +59,15 @@ where
         Ok(())
     }
 
-    /// Initiates ''Get'' operation in remote MerkleBTree. Returns found value,
-    /// None if nothing was found.
+    /// Initiates 'Get' operation in MerkleBTree.
+    /// Returns found value, None if nothing was found.
     ///
-    /// # Arguments
+    /// `search_callback` - Wrapper for all callback needed for 'Get' operation to the BTree
     ///
-    /// * `search_callback` - Wrapper for all callback needed for ''Get''
-    /// operation to the BTree
-    ///
-    pub async fn get<'a, Scb: SearchCallback + 'a>(
-        &mut self,
-        search_callback: Scb,
-    ) -> Result<Option<Bytes>> {
+    pub async fn get<'a, Scb>(&mut self, search_callback: Scb) -> Result<Option<Bytes>>
+    where
+        Scb: SearchCallback + 'a,
+    {
         let index_lock = self.index.read().await;
 
         if let Some(val_ref) = index_lock.get(Cmd::new(search_callback)).await? {
@@ -82,7 +79,43 @@ where
         }
     }
 
-    // todo get, put, remove, traverse
+    /// Initiates 'Put' operation in MerkleBTree.
+    /// Returns old value if old value was overridden, None otherwise.
+    ///
+    /// `put_callbacks` Wrapper for all callback needed for 'Put' operation to the BTree.
+    /// `version` Dataset version expected to the client
+    /// `encrypted_value` Encrypted value
+    pub async fn put<'a, Scb>(
+        &mut self,
+        put_callback: Scb,
+        _version: usize,
+        encrypted_value: Bytes,
+    ) -> Result<Option<Bytes>>
+    where
+        Scb: PutCallbacks + BtreeCallback + Clone + 'a,
+    {
+        // todo start transaction
+
+        // find place into index and get value reference
+        let mut index_lock = self.index.write().await;
+        let val_ref = index_lock.put(Cmd::new(put_callback)).await?;
+
+        // safe new value to value store
+        let mut val_store = self.value_store.write().await;
+        let old_value = val_store.set(val_ref.0, encrypted_value).await?;
+
+        // todo increment expected client version by one and save somewhere client's signature + merkle root + version
+
+        // let root = index_lock.get_root().await?;
+        // let client_signature = todo!();
+        // let version = version + 1;
+
+        Ok(old_value)
+
+        // todo end transaction, revert all changes if error appears
+    }
+
+    // todo remove, traverse
 }
 
 #[cfg(test)]
@@ -121,7 +154,7 @@ mod tests {
     ) -> OpeBTree<Store, NoOpHasher> {
         OpeBTree::new(
             OpeBTreeConf {
-                arity: 8,
+                arity: 4,
                 alpha: 0.25_f32,
             },
             node_store,

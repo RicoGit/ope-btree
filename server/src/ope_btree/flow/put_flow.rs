@@ -91,7 +91,7 @@ where
     /// This is the terminal method.
     /// Returns plan of updating Btree and value reference
     pub async fn put_for_leaf(
-        self,
+        mut self,
         leaf_id: NodeId,
         leaf: LeafNode,
         trail: Trail,

@@ -211,8 +211,8 @@ mod tests {
     }
 
     #[test]
-    fn new_merkle_root_empty_tree_test() {
-        // putting into empty tree
+    fn simple_put_new_merkle_root_empty_tree_test() {
+        // simple put putting into empty tree
         let verifier = BTreeVerifier::<NoOpHasher>::new();
 
         let client_path = MerklePath::empty();
@@ -224,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn new_merkle_root_insert_new_value_test() {
+    fn simple_put_new_merkle_root_insert_new_value_test() {
         // insert new value
         let verifier = BTreeVerifier::<NoOpHasher>::new();
 
@@ -238,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn new_merkle_root_rewrite_value_test() {
+    fn simple_put_new_merkle_root_rewrite_value_test() {
         // rewrite old value with new value
         let verifier = BTreeVerifier::<NoOpHasher>::new();
 
@@ -252,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn new_merkle_root_rewrite_2_lvl_value_test() {
+    fn simple_put_new_merkle_root_rewrite_2_lvl_value_test() {
         // rewrite old value with new value in second tree lvl
         let verifier = BTreeVerifier::<NoOpHasher>::new();
 
@@ -268,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn new_merkle_root_insert_2_lvl_value_test() {
+    fn simple_put_new_merkle_root_insert_2_lvl_value_test() {
         // insert new value in second tree lvl
         let verifier = BTreeVerifier::<NoOpHasher>::new();
 
@@ -283,7 +283,7 @@ mod tests {
         assert_eq!(res, Some(server_root));
     }
     #[test]
-    fn new_merkle_root_fail_check_test() {
+    fn simple_put_new_merkle_root_fail_check_test() {
         // wrong root
         let verifier = BTreeVerifier::<NoOpHasher>::new();
 
@@ -293,6 +293,11 @@ mod tests {
 
         let res = verifier.new_merkle_root(client_path, put_details, server_root.clone(), false);
         assert_eq!(res, None);
+    }
+
+    #[test]
+    fn rebalancing_new_merkle_root_empty_tree_test() {
+        // todo add more test for verify after rebalancing
     }
 
     fn put_det(key: &str, val: &str, sr: SearchResult) -> ClientPutDetails {

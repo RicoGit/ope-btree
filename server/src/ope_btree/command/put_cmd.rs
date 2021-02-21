@@ -30,12 +30,14 @@ impl<Cb: PutCallbacks> Cmd<Cb> {
     /// * `was_splitting` - An indicator of the fact that during inserting there
     ///                     was a tree rebalancing
     pub async fn verify_changes<D: Digest>(
-        &self,
+        &mut self,
         merkle_path: MerklePath,
         was_splitting: bool,
     ) -> Result<()> {
         let merkle_root = merkle_path.calc_merkle_root::<D>(None).bytes();
-        let _ = self.cb.verify_changes(merkle_root, was_splitting).await?;
+        let state_signed_by_client = self.cb.verify_changes(merkle_root, was_splitting).await?;
+        // we got new BTree state approved and signed by client
+        self.state_signed_by_client.replace(state_signed_by_client);
         self.cb.changes_stored().await?;
         Ok(())
     }
