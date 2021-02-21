@@ -48,8 +48,8 @@ impl<D: Digest> BTreeVerifier<D> {
 
     /// Checks 'server's proof' correctness. Calculates proof checksums and compares it with expected checksum.
     /// `server_proof` A [[NodeProof]] of branch/leaf for verify from server
-    /// `m_root` The merkle root of server tree
-    /// `m_path` The merkle path passed from tree root at this moment
+    /// `m_root` The merkle root of server tree (provides by client)
+    /// `m_path` The merkle path passed from tree root at this moment (provides by client)
     fn check_proof(&self, server_proof: NodeProof, m_root: Hash, m_path: MerklePath) -> bool {
         let server_hash = server_proof.calc_checksum::<D>(None);
         let client_hash = self.expected_checksum(m_root, m_path);
@@ -120,10 +120,94 @@ impl<D: Digest> BTreeVerifier<D> {
         NodeProof::new_proof::<D>(keys, children_checksums, Some(substitution_idx))
     }
 
-    /// Returns expected checksum of next branch that should be returned from server
+    /// Returns expected checksum of next branch that should be returned from server.
+    /// We don't nee to check all merkle path, there is enough to check only next proof.
     /// `m_root` The merkle root of server tree
     /// `m_path` The merkle path already passed from tree root
     fn expected_checksum(&self, m_root: Hash, m_path: MerklePath) -> Hash {
         m_path.last_proof_children_hash().cloned().unwrap_or(m_root)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::noop_hasher::NoOpHasher;
+
+    #[test]
+    fn check_proof_false_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let verifier = BTreeVerifier::<NoOpHasher>::new();
+        let children_hashes = vec![h("h1"), h("h2"), h("h3")];
+
+        // wrong root (correct is Hash[512, [[h1][h2][h3]]])
+        let res = verifier.check_proof(
+            NodeProof::new(Hash::empty(), children_hashes.clone(), None),
+            h("m_root"),
+            MerklePath::empty(),
+        );
+        assert!(!res);
+
+        // wrong state_hash (correct is Hash[512, [[k1k2][h1][h2][h3]]])
+        let res = verifier.check_proof(
+            NodeProof::new(h("k1k2"), children_hashes.clone(), None),
+            h("m_root"),
+            MerklePath::empty(),
+        );
+        assert!(!res);
+
+        // substitution index doesnt make any effect (correct is Hash[512, [[k1k2][h1][h2][h3]]])
+        let res = verifier.check_proof(
+            NodeProof::new(h("k1k2"), children_hashes.clone(), Some(1)),
+            h("m_root"),
+            MerklePath::empty(),
+        );
+        assert!(!res);
+
+        // if client merkle path is not empty, compare client and server (correct is Hash[512, [h2])
+        let proof = NodeProof::new(h("k1k2"), children_hashes.clone(), Some(1));
+        let res = verifier.check_proof(proof.clone(), h("m_root"), MerklePath::new(proof));
+        assert!(!res);
+    }
+
+    #[test]
+    fn check_proof_true_test() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
+        let verifier = BTreeVerifier::<NoOpHasher>::new();
+        let children_hashes = vec![h("h1"), h("h2"), h("h3")];
+
+        // client's path is empty, state hash is empty
+        let res = verifier.check_proof(
+            NodeProof::new(Hash::empty(), children_hashes.clone(), None),
+            h("[h1][h2][h3]"),
+            MerklePath::empty(),
+        );
+        assert!(res);
+
+        // client's path is empty, state hash exists
+        let res = verifier.check_proof(
+            NodeProof::new(h("k1k2"), children_hashes.clone(), None),
+            h("[k1k2][h1][h2][h3]"),
+            MerklePath::empty(),
+        );
+        assert!(res);
+
+        // client's path is not empty, state hash exists
+        let proof = NodeProof::new(h("k1k2"), children_hashes.clone(), Some(1));
+        let res = verifier.check_proof(
+            NodeProof::new(Hash::empty(), vec![Hash::from_str("h2")], None),
+            h("[k1k2][h1][h2][h3]"),
+            MerklePath::new(proof),
+        );
+        assert!(res);
+    }
+
+    fn k(idx: usize) -> String {
+        format!("k{}", idx)
+    }
+    fn h(str: &str) -> Hash {
+        Hash::build::<NoOpHasher, _>(str.as_bytes())
     }
 }
