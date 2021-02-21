@@ -1,5 +1,6 @@
 use crate::ope_btree::command::{Cmd, Result};
 use crate::ope_btree::internal::node::{AsBytes, LeafNode};
+use bytes::Bytes;
 use common::merkle::MerklePath;
 use common::misc::ToBytes;
 use common::Digest;
@@ -29,16 +30,15 @@ impl<Cb: PutCallbacks> Cmd<Cb> {
     /// * `merkle_path` - A tree path traveled in the OpeBTree from the root to a leaf
     /// * `was_splitting` - An indicator of the fact that during inserting there
     ///                     was a tree rebalancing
+    /// Returns signed by client new Btree state
     pub async fn verify_changes<D: Digest>(
         &mut self,
         merkle_path: MerklePath,
         was_splitting: bool,
-    ) -> Result<()> {
+    ) -> Result<Bytes> {
         let merkle_root = merkle_path.calc_merkle_root::<D>(None).bytes();
         let state_signed_by_client = self.cb.verify_changes(merkle_root, was_splitting).await?;
-        // we got new BTree state approved and signed by client
-        self.state_signed_by_client.replace(state_signed_by_client);
         self.cb.changes_stored().await?;
-        Ok(())
+        Ok(state_signed_by_client)
     }
 }

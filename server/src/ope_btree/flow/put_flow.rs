@@ -17,6 +17,7 @@ use crate::ope_btree::internal::node::{
 use crate::ope_btree::internal::node_store::BinaryNodeStore;
 use crate::ope_btree::internal::tree_path::PathElem;
 use crate::ope_btree::{BTreeErr, NodeId, Result, Trail, ValRefGen, ValueRef, ROOT_ID};
+use bytes::Bytes;
 
 /// Encapsulates all logic for putting into tree
 #[derive(Debug, Clone)]
@@ -60,7 +61,13 @@ where
     ///
     /// `node_id` Id of walk-through branch node
     /// `node`   Walk-through node
-    pub async fn put_for_node(self, node_id: NodeId, node: Node) -> Result<(PutTask, ValueRef)> {
+    ///
+    /// Returns plan of updating Btree, value reference, and sign for new state tree
+    pub async fn put_for_node(
+        self,
+        node_id: NodeId,
+        node: Node,
+    ) -> Result<(PutTask, ValueRef, Bytes)> {
         let mut trail = Trail::empty();
         let mut current_node_id = node_id;
         let mut current_node = node;
@@ -89,13 +96,13 @@ where
     /// Puts new ''key'' and ''value'' to this leaf.
     /// Also makes all tree transformation (rebalancing, persisting to store).
     /// This is the terminal method.
-    /// Returns plan of updating Btree and value reference
+    /// Returns plan of updating Btree, value reference, and sign for new state tree
     pub async fn put_for_leaf(
         mut self,
         leaf_id: NodeId,
         leaf: LeafNode,
         trail: Trail,
-    ) -> Result<(PutTask, ValueRef)> {
+    ) -> Result<(PutTask, ValueRef, Bytes)> {
         log::debug!("Put for leaf_id={:?}, leaf={:?}", leaf_id, &leaf);
 
         let put_details = self.cmd.put_details(leaf.clone()).await?;
@@ -107,11 +114,12 @@ where
             .await;
 
         // after all the logical operations, we need to send the merkle path to the client for verification
-        self.cmd
+        let signed_state = self
+            .cmd
             .verify_changes::<D>(new_state_proof, put_task.was_splitting)
             .await?;
 
-        Ok((put_task, val_ref))
+        Ok((put_task, val_ref, signed_state))
     }
 
     /// Puts new ''key'' and ''value'' to this leaf.

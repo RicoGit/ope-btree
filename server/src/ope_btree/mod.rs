@@ -12,7 +12,6 @@ use crate::ope_btree::internal::tree_path::TreePath;
 use bytes::Bytes;
 use common::gen::{Generator, NumGen};
 use common::merkle::{MerkleError, MerklePath, NodeProof};
-use common::misc::ToBytes;
 use common::{Digest, Hash};
 use flow::get_flow::GetFlow;
 use flow::put_flow::{PutFlow, PutTask};
@@ -173,7 +172,7 @@ where
                 node: new_root,
             }];
             let task = PutTask::new(nodes, true, false);
-            self.commit_new_state(task).await?;
+            self.commit_new_state(task, &Bytes::new()).await?;
         }
 
         Ok(())
@@ -227,7 +226,7 @@ where
     /// Returns reference to value that corresponds search Key. In update case
     /// will be returned old reference, in insert case will be created new
     /// reference to value
-    pub async fn put<Cb>(&mut self, cmd: Cmd<Cb>) -> Result<ValueRef>
+    pub async fn put<Cb>(&mut self, mut cmd: Cmd<Cb>) -> Result<(ValueRef, Bytes)>
     where
         Cb: PutCallbacks + BtreeCallback + Clone,
     {
@@ -250,8 +249,9 @@ where
 
             // send the merkle path to the client for verification
             let leaf_proof = NodeProof::new(Hash::empty(), new_leaf.kv_hashes.clone(), Some(0));
-            let merkle_root = MerklePath::new(leaf_proof).calc_merkle_root::<D>(None);
-            let _signed_root = cmd.cb.verify_changes(merkle_root.bytes(), false).await?;
+            let state_signed_by_client = cmd
+                .verify_changes::<D>(MerklePath::new(leaf_proof), false)
+                .await?;
 
             // Safe changes
             let task = PutTask::new(
@@ -259,8 +259,8 @@ where
                 true,
                 false,
             );
-            self.commit_new_state(task).await?;
-            Ok(value_ref)
+            self.commit_new_state(task, &state_signed_by_client).await?;
+            Ok((value_ref, state_signed_by_client))
         } else {
             let flow = PutFlow::<_, _, D>::new(
                 cmd,
@@ -269,11 +269,13 @@ where
                 self.max_degree,
                 self.min_degree,
             );
-            let (put_task, value_ref) = flow.put_for_node(ROOT_ID, root).await?;
+            let (put_task, value_ref, state_signed_by_client) =
+                flow.put_for_node(ROOT_ID, root).await?;
 
             // persists changes
-            self.commit_new_state(put_task).await?;
-            Ok(value_ref)
+            self.commit_new_state(put_task, &state_signed_by_client)
+                .await?;
+            Ok((value_ref, state_signed_by_client))
         }
     }
 
@@ -307,7 +309,13 @@ where
     }
 
     /// Saves all changed nodes to tree store. Apply `task` to old tree state for getting new tree state.
-    async fn commit_new_state(&mut self, task: PutTask) -> Result<()> {
+    async fn commit_new_state(
+        &mut self,
+        task: PutTask,
+        _state_signed_by_client: &Bytes,
+    ) -> Result<()> {
+        // todo before commit state we have to check client's signature
+
         log::debug!("commit_new_state for nodes={:?}", task);
 
         // todo start transaction
@@ -447,7 +455,8 @@ mod tests {
             put_details_vec,
             verify_changes_vec,
         ));
-        let res2 = tree.put(cmd2).await.unwrap();
+        let (res2, signature) = tree.put(cmd2).await.unwrap();
+        assert_eq!(signature, Bytes::from("SignedRoot"));
 
         // get value stored before
         let submit_leaf_vec = vec![SearchResult::Ok(0)];

@@ -98,7 +98,7 @@ where
 
         // find place into index and get value reference
         let mut index_lock = self.index.write().await;
-        let val_ref = index_lock.put(Cmd::new(put_callback)).await?;
+        let (val_ref, _state_signed_by_client) = index_lock.put(Cmd::new(put_callback)).await?;
 
         // safe new value to value store
         let mut val_store = self.value_store.write().await;
@@ -107,7 +107,7 @@ where
         // todo increment expected client version by one and save somewhere client's signature + merkle root + version
 
         // let root = index_lock.get_root().await?;
-        // let client_signature = todo!();
+        // let state_signed_by_client = state_signed_by_client
         // let version = version + 1;
 
         Ok(old_value)
