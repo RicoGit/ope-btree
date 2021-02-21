@@ -43,7 +43,7 @@ pub struct NodeProof {
     /// of child.
     children_hashes: Vec<Hash>,
     /// An index for a substitution some child hash to `children_hashes`
-    substitution_idx: Option<usize>,
+    substitution_idx: Option<usize>, // todo consider to remove Option
 }
 
 impl NodeProof {
@@ -155,6 +155,15 @@ impl MerklePath {
         let proof = self.0.last()?;
         let idx = proof.substitution_idx?;
         proof.children_hashes.get(idx)
+    }
+
+    /// If last proof exists, adds to it child_hash on substitution position
+    pub fn insert_child_hash_to_last_proof(&mut self, child_hash: Hash) {
+        self.0.last_mut().map(|last_proof| {
+            last_proof
+                .children_hashes
+                .insert(last_proof.substitution_idx.unwrap(), child_hash);
+        });
     }
 
     /// Calculates new merkle root from merkle path. Folds merkle path from the right to the left and

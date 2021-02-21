@@ -77,14 +77,18 @@ impl<D: Digest> BTreeVerifier<D> {
         let kv_hash = Hash::build::<D, _>(encrypted_key);
 
         match put_details.search_result {
-            Err(_) => client_m_path.calc_merkle_root::<D>(Some(kv_hash)),
-            Ok(_) => {
+            Err(_) => {
+                // insertion
                 if client_m_path.is_empty() {
-                    client_m_path.add(NodeProof::new(Hash::empty(), vec![kv_hash], Some(0)));
-                    client_m_path.calc_merkle_root::<D>(None)
-                } else {
                     client_m_path.calc_merkle_root::<D>(Some(kv_hash))
+                } else {
+                    client_m_path.insert_child_hash_to_last_proof(kv_hash);
+                    client_m_path.calc_merkle_root::<D>(None)
                 }
+            }
+            Ok(_) => {
+                // replace
+                client_m_path.calc_merkle_root::<D>(Some(kv_hash))
             }
         }
     }
@@ -132,7 +136,9 @@ impl<D: Digest> BTreeVerifier<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::misc::ToBytes;
     use common::noop_hasher::NoOpHasher;
+    use protocol::SearchResult;
 
     #[test]
     fn check_proof_false_test() {
@@ -204,8 +210,96 @@ mod tests {
         assert!(res);
     }
 
-    fn k(idx: usize) -> String {
-        format!("k{}", idx)
+    #[test]
+    fn new_merkle_root_empty_tree_test() {
+        // putting into empty tree
+        let verifier = BTreeVerifier::<NoOpHasher>::new();
+
+        let client_path = MerklePath::empty();
+        let put_details = put_det("k1", "h1", Ok(0));
+        let server_root = h("k1[h1]");
+
+        let res = verifier.new_merkle_root(client_path, put_details, server_root.clone(), false);
+        assert_eq!(res, Some(server_root));
+    }
+
+    #[test]
+    fn new_merkle_root_insert_new_value_test() {
+        // insert new value
+        let verifier = BTreeVerifier::<NoOpHasher>::new();
+
+        let client_path =
+            MerklePath::new(NodeProof::new(Hash::empty(), vec![h("k2[h2]")], Some(0)));
+        let put_details = put_det("k1", "h1", Err(0));
+        let server_root = h("[k1[h1]][k2[h2]]");
+
+        let res = verifier.new_merkle_root(client_path, put_details, server_root.clone(), false);
+        assert_eq!(res, Some(server_root));
+    }
+
+    #[test]
+    fn new_merkle_root_rewrite_value_test() {
+        // rewrite old value with new value
+        let verifier = BTreeVerifier::<NoOpHasher>::new();
+
+        let client_path =
+            MerklePath::new(NodeProof::new(Hash::empty(), vec![h("k2[h2]")], Some(0)));
+        let put_details = put_det("k2", "h#", Ok(0));
+        let server_root = h("[k2[h#]]");
+
+        let res = verifier.new_merkle_root(client_path, put_details, server_root.clone(), false);
+        assert_eq!(res, Some(server_root));
+    }
+
+    #[test]
+    fn new_merkle_root_rewrite_2_lvl_value_test() {
+        // rewrite old value with new value in second tree lvl
+        let verifier = BTreeVerifier::<NoOpHasher>::new();
+
+        let root_children_hashes = vec![h("[k1[h1]][k2[h2]]"), h("[k4[h4]][k5[h5]]")];
+        let root_proof = verifier.get_branch_proof(vec![k("k2")], root_children_hashes, 0);
+        let leaf_proof = NodeProof::new(Hash::empty(), vec![h("k1[h1]"), h("k2[h2]")], Some(1));
+        let client_path = MerklePath(vec![root_proof, leaf_proof]);
+        let put_details = put_det("k2", "h#", Ok(0));
+        let server_root = h("[k2][[k1[h1]][k2[h#]]][[k4[h4]][k5[h5]]]");
+
+        let res = verifier.new_merkle_root(client_path, put_details, server_root.clone(), false);
+        assert_eq!(res, Some(server_root));
+    }
+
+    #[test]
+    fn new_merkle_root_insert_2_lvl_value_test() {
+        // insert new value in second tree lvl
+        let verifier = BTreeVerifier::<NoOpHasher>::new();
+
+        let root_children_hashes = vec![h("[k1[h1]][k2[h2]]"), h("[k4[h4]][k5[h5]]")];
+        let root_proof = verifier.get_branch_proof(vec![k("k2")], root_children_hashes, 1);
+        let leaf_proof = NodeProof::new(Hash::empty(), vec![h("k4[h4]"), h("k5[h5]")], Some(0));
+        let client_path = MerklePath(vec![root_proof, leaf_proof]);
+        let put_details = put_det("k3", "h#", Err(0));
+        let server_root = h("[k2][[k1[h1]][k2[h2]]][[k3[h#]][k4[h4]][k5[h5]]]");
+
+        let res = verifier.new_merkle_root(client_path, put_details, server_root.clone(), false);
+        assert_eq!(res, Some(server_root));
+    }
+    #[test]
+    fn new_merkle_root_fail_check_test() {
+        // wrong root
+        let verifier = BTreeVerifier::<NoOpHasher>::new();
+
+        let client_path = MerklePath::empty();
+        let put_details = put_det("k1", "h1", Ok(0));
+        let server_root = h("wrong server root");
+
+        let res = verifier.new_merkle_root(client_path, put_details, server_root.clone(), false);
+        assert_eq!(res, None);
+    }
+
+    fn put_det(key: &str, val: &str, sr: SearchResult) -> ClientPutDetails {
+        ClientPutDetails::new(k(key).bytes(), h(val).bytes(), sr)
+    }
+    fn k(str: &str) -> Key {
+        Key::from_str(str)
     }
     fn h(str: &str) -> Hash {
         Hash::build::<NoOpHasher, _>(str.as_bytes())
