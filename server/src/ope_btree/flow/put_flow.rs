@@ -71,7 +71,7 @@ where
         let mut trail = Trail::empty();
         let mut current_node_id = node_id;
         let mut current_node = node;
-        let get_flow = GetFlow::new(self.cmd.clone(), self.node_store.clone());
+        let mut get_flow = GetFlow::new(self.cmd.clone(), self.node_store.clone());
 
         loop {
             match current_node {
@@ -110,7 +110,12 @@ where
 
         // makes all transformations over the copy of tree
         let (new_state_proof, put_task) = self
-            .logical_put(leaf_id, updated_leaf, put_details.idx(), trail)
+            .logical_put(
+                leaf_id,
+                updated_leaf,
+                put_details.search_result.idx(),
+                trail,
+            )
             .await;
 
         // after all the logical operations, we need to send the merkle path to the client for verification
@@ -139,7 +144,7 @@ where
         } = put_detail;
 
         let res = match search_result {
-            SearchResult::Ok(idx_of_update) => {
+            SearchResult(Ok(idx_of_update)) => {
                 // key was founded in this Leaf, update leaf with new value
                 let old_value_ref = leaf.val_refs.get(idx_of_update).cloned().ok_or_else(|| {
                     BTreeErr::node_not_found(
@@ -155,7 +160,7 @@ where
                 );
                 (updated_leaf, old_value_ref)
             }
-            SearchResult::Err(idx_of_insert) => {
+            SearchResult(Err(idx_of_insert)) => {
                 // key wasn't found in this Leaf, insert new value to the leaf
                 let new_val_ref = self.val_ref_gen.lock().await.next();
                 let updated_leaf = leaf.insert::<D>(
@@ -205,7 +210,7 @@ where
         let mut ctx: PutCtx = self.create_leaf_ctx(leaf_id, new_leaf, found_val_idx).await;
 
         for branch in trail.branches.into_iter().rev() {
-            ctx = self.create_tree_path_ctx(ctx, branch).await
+            ctx = self.create_tree_path_ctx(ctx, branch).await;
         }
 
         (ctx.new_state_proof, ctx.put_task)
@@ -260,10 +265,11 @@ where
             };
 
             ctx.new_state_proof
-                .add(affected_branch.to_proof::<D>(affected_branch_idx));
+                .push_head(affected_branch.to_proof::<D>(Some(affected_branch_idx)));
 
             if is_root {
                 // there was no parent, root node was splitting
+                log::trace!("Logical put with rebalancing for root branch");
 
                 let pop_up_key = left.keys.iter().last().cloned().expect("Can't be empty");
                 let new_parent = BranchNode::new::<D>(
@@ -274,7 +280,7 @@ where
                 let affected_parent_idx = if is_insert_to_left { 0 } else { 1 };
 
                 ctx.new_state_proof
-                    .add(new_parent.to_proof::<D>(affected_parent_idx));
+                    .push_head(new_parent.to_proof::<D>(Some(affected_parent_idx)));
 
                 let mut node_to_save = ctx.put_task.nodes_to_save;
                 node_to_save.extend(vec![
@@ -288,6 +294,8 @@ where
                     put_task: PutTask::new(node_to_save, true, true),
                 }
             } else {
+                log::trace!("Logical put with rebalancing for regular branch");
+
                 // some regular branch was splitting
                 let left_with_id = NodeWithId::new(left_id, Node::Branch(left));
                 let right_with_id = NodeWithId::new(right_id, Node::Branch(right));
@@ -304,9 +312,11 @@ where
                 }
             }
         } else {
+            log::trace!("Simple logical put of branch={:?}", &branch);
+
             let child_hash = branch.hash.clone();
             ctx.new_state_proof
-                .add(branch.to_proof::<D>(next_child_idx));
+                .push_head(branch.to_proof::<D>(Some(next_child_idx)));
             ctx.put_task
                 .nodes_to_save
                 .push(NodeWithId::new(branch_id, Node::Branch(branch)));
@@ -327,17 +337,17 @@ where
     /// * puts all updated and new nodes to ''nodesToSave'' into [[PutTask]]
     ///
     /// `leaf_id`  Id of leaf that was updated
-    /// `new_leaf` Leaf that was updated with new key and value
+    /// `leaf` Leaf that was updated with new key and value
     /// `searched_value_idx` Insertion index of a new value
     ///
     async fn create_leaf_ctx(
         &self,
         leaf_id: NodeId,
-        new_leaf: LeafNode,
+        leaf: LeafNode,
         searched_value_idx: usize,
     ) -> PutCtx {
-        if new_leaf.has_overflow(self.max_degree) {
-            log::info!("Do split for leaf_id={}, leaf={:?}", leaf_id, new_leaf);
+        if leaf.has_overflow(self.max_degree) {
+            log::info!("Do split for leaf_id={}, leaf={:?}", leaf_id, leaf);
 
             let is_root = leaf_id == ROOT_ID;
             // get ids for new nodes, right node should be with new id, because each leaf points to right sibling
@@ -349,18 +359,20 @@ where
                 leaf_id
             };
 
-            let (left, right) = new_leaf.split::<D>(right_id);
+            let (left, right) = leaf.split::<D>(right_id);
 
             let is_insert_to_left = searched_value_idx < left.size;
-            let (affected_leaf, affected_leaf_idx) = if is_insert_to_left {
+            let (affected_leaf, _affected_leaf_idx) = if is_insert_to_left {
                 (left.clone(), searched_value_idx)
             } else {
                 (right.clone(), searched_value_idx - left.size)
             };
 
-            let mut merkle_path = MerklePath::new(affected_leaf.to_proof(affected_leaf_idx));
+            let mut merkle_path = MerklePath::new(affected_leaf.to_proof(None));
 
             if is_root {
+                log::trace!("Logical put with rebalancing for root leaf");
+
                 // there is no parent, root leaf was split
                 let pop_up_key = left.keys.iter().last().cloned().expect("Can't be empty");
                 let new_parent = BranchNode::new::<D>(
@@ -370,7 +382,7 @@ where
                 );
                 let affected_parent_idx = if is_insert_to_left { 0 } else { 1 };
 
-                merkle_path.add(new_parent.to_proof::<D>(affected_parent_idx));
+                merkle_path.push_head(new_parent.to_proof::<D>(Some(affected_parent_idx)));
 
                 PutCtx {
                     new_state_proof: merkle_path,
@@ -386,6 +398,8 @@ where
                     ),
                 }
             } else {
+                log::trace!("Logical put with rebalancing for regular leaf");
+
                 // some regular leaf was split
                 let left_with_id = NodeWithId::new(left_id, Node::Leaf(left));
                 let right_with_id = NodeWithId::new(right_id, Node::Leaf(right));
@@ -400,13 +414,14 @@ where
                 }
             }
         } else {
+            log::trace!("Simple logical put of leaf={:?}", &leaf);
             PutCtx {
-                new_state_proof: MerklePath::new(new_leaf.to_proof(searched_value_idx)),
+                new_state_proof: MerklePath::new(leaf.to_proof(None)),
                 update_parent: UpdateParent::AfterChildChanging {
-                    child_hash: new_leaf.hash.clone(),
+                    child_hash: leaf.hash.clone(),
                 },
                 put_task: PutTask::new(
-                    vec![NodeWithId::new(leaf_id, Node::Leaf(new_leaf))],
+                    vec![NodeWithId::new(leaf_id, Node::Leaf(leaf))],
                     false,
                     false,
                 ),

@@ -161,12 +161,8 @@ impl LeafNode {
         self.size > max
     }
 
-    pub fn to_proof(&self, substitution_idx: usize) -> NodeProof {
-        NodeProof::new(
-            Hash::empty(),
-            self.kv_hashes.clone(),
-            Some(substitution_idx),
-        )
+    pub fn to_proof(&self, substitution_idx: Option<usize>) -> NodeProof {
+        NodeProof::new(Hash::empty(), self.kv_hashes.clone(), substitution_idx)
     }
 
     /// Splits current LeafNode
@@ -325,11 +321,11 @@ impl BranchNode {
         self.children_refs.len() > self.size
     }
 
-    pub fn to_proof<D: Digest>(&self, substitution_idx: usize) -> NodeProof {
+    pub fn to_proof<D: Digest>(&self, substitution_idx: Option<usize>) -> NodeProof {
         NodeProof::new_proof::<D>(
             self.keys.clone(),
             self.children_hashes.clone(),
-            Some(substitution_idx),
+            substitution_idx,
         )
     }
 }

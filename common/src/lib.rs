@@ -89,6 +89,12 @@ impl AsRef<[u8]> for Hash {
     }
 }
 
+impl AsRef<[u8]> for Key {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
 impl Display for Hash {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = self.as_str().unwrap_or_else(|_| "[]".to_string());

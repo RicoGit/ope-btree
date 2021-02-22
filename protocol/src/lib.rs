@@ -24,7 +24,15 @@ pub type RpcFuture<'f, V> = BoxFuture<'f, Result<V>>;
 /// of the matching element. If the value is not found then [`Result::Err`] is
 /// returned, containing the index where a matching element could be inserted
 /// while maintaining sorted order.
-pub type SearchResult = result::Result<usize, usize>;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SearchResult(pub std::result::Result<usize, usize>);
+
+impl SearchResult {
+    /// Returns insertion point index
+    pub fn idx(&self) -> usize {
+        self.0.unwrap_or_else(|_| self.0.unwrap_err())
+    }
+}
 
 /// Base parent for all callback wrappers needed for any BTree's operation.
 pub trait BtreeCallback: Send {
@@ -40,7 +48,7 @@ pub trait BtreeCallback: Send {
     /// Next child node position.
     ///
     fn next_child_idx<'f>(
-        &self,
+        &mut self,
         keys: Vec<Bytes>,
         children_hashes: Vec<Bytes>,
     ) -> RpcFuture<'f, usize>;
@@ -89,12 +97,6 @@ impl ClientPutDetails {
             val_hash,
             search_result,
         }
-    }
-
-    /// Returns insertion point index
-    pub fn idx(&self) -> usize {
-        self.search_result
-            .unwrap_or_else(|_| self.search_result.unwrap_err())
     }
 }
 

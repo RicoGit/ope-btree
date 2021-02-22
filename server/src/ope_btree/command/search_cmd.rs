@@ -17,7 +17,7 @@ impl<Cb: BtreeCallback> Cmd<Cb> {
     ///
     /// * `branch` -  A branch node of OpeBTree for searching.
     ///
-    pub async fn next_child_idx(&self, branch: BranchNode) -> Result<usize> {
+    pub async fn next_child_idx(&mut self, branch: BranchNode) -> Result<usize> {
         let BranchNode {
             keys,
             children_hashes,

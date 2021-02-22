@@ -43,7 +43,7 @@ pub struct NodeProof {
     /// of child.
     children_hashes: Vec<Hash>,
     /// An index for a substitution some child hash to `children_hashes`
-    substitution_idx: Option<usize>, // todo consider to remove Option
+    substitution_idx: Option<usize>,
 }
 
 impl NodeProof {
@@ -94,6 +94,7 @@ impl NodeProof {
     pub fn calc_checksum<D: Digest>(self, hash_for_substitution: Option<Hash>) -> Hash {
         let state = match hash_for_substitution {
             None => {
+                assert!(self.substitution_idx.is_none(), "Illegal state: substitution idx is define, but hash for substitution is not defined.");
                 // if a hash for substitution isn't defined just calculate node hash
                 let NodeProof {
                     mut state_hash,
@@ -126,6 +127,11 @@ impl NodeProof {
 
         Hash::build::<D, _>(state)
     }
+
+    /// Updates substitution index
+    pub fn set_idx(&mut self, substitution_idx: usize) {
+        let _ = self.substitution_idx.replace(substitution_idx);
+    }
 }
 
 /// A Merkle path traversed from the root to a leaf. The head of this path corresponds
@@ -146,8 +152,8 @@ impl MerklePath {
     }
 
     /// Adds new `proof` to the end of the merkle path.
-    pub fn add(&mut self, proof: NodeProof) {
-        self.0.push(proof);
+    pub fn push_head(&mut self, proof: NodeProof) {
+        self.0.insert(0, proof);
     }
 
     /// Returns child's hash for substitution index from last proof
@@ -157,13 +163,19 @@ impl MerklePath {
         proof.children_hashes.get(idx)
     }
 
-    /// If last proof exists, adds to it child_hash on substitution position
-    pub fn insert_child_hash_to_last_proof(&mut self, child_hash: Hash) {
-        self.0.last_mut().map(|last_proof| {
+    pub fn insert_child_hash_to_last_proof2(&mut self, child_hash: Hash) {
+        self.0.last_mut().and_then(|last_proof| {
             last_proof
-                .children_hashes
-                .insert(last_proof.substitution_idx.unwrap(), child_hash);
+                .substitution_idx
+                .map(|idx| last_proof.children_hashes.insert(idx, child_hash))
         });
+    }
+
+    /// If last proof exists, adds to it child_hash on substitution position
+    pub fn insert_child_hash_to_last_proof(&mut self, child_hash: Hash, idx: usize) {
+        self.0
+            .last_mut()
+            .map(|last_proof| last_proof.children_hashes.insert(idx, child_hash));
     }
 
     /// Calculates new merkle root from merkle path. Folds merkle path from the right to the left and
@@ -220,7 +232,7 @@ mod tests {
     #[test]
     fn node_proof_checksum_noop_hasher_test() {
         // Calculate checksum of nodeProof with substitution (noop hasher)
-        let proof = node_proof("State");
+        let proof = node_proof("State", Some(1));
         let result = proof
             .clone()
             .calc_checksum::<NoOpHasher>(Some(Hash::from_str("#new#")));
@@ -231,7 +243,7 @@ mod tests {
     #[test]
     fn node_proof_checksum_noop_hasher_without_substitution_test() {
         // Calculate checksum of nodeProof without substitution (noop hasher)
-        let proof = node_proof("State");
+        let proof = node_proof("State", None);
         let result = proof.clone().calc_checksum::<NoOpHasher>(None);
 
         assert_eq!(result.to_string(), "Hash[512, [StateChild1Child2Child3]]")
@@ -240,7 +252,7 @@ mod tests {
     #[test]
     fn node_proof_to_checksum_without_substitution_test() {
         // Calculate checksum of nodeProof without substitution
-        let proof = node_proof("state");
+        let proof = node_proof("state", None);
         let result = proof.clone().calc_checksum::<Sha3_256>(None);
 
         let NodeProof {
@@ -259,7 +271,7 @@ mod tests {
     #[test]
     fn node_proof_to_checksum_with_substitution_test() {
         // Calculate checksum of nodeProof with substitution
-        let proof = node_proof("state");
+        let proof = node_proof("state", Some(1));
         let result = proof
             .clone()
             .calc_checksum::<Sha3_256>(Some(Hash::from_str("#new#")));
@@ -284,21 +296,24 @@ mod tests {
     }
 
     #[test]
-    fn merkle_path_add_test() {
+    fn merkle_path_push_head_test() {
         // Adds new NodeProof to MerklePath
-        let proof1 = node_proof("proof1");
-        let proof2 = node_proof("proof2");
+        let proof1 = node_proof("proof1", None);
+        let proof2 = node_proof("proof2", None);
         let mut m_path = MerklePath::empty();
-        m_path.add(proof1.clone());
+        m_path.push_head(proof1.clone());
         assert_eq!(MerklePath(vec![proof1.clone()]), m_path);
-        m_path.add(proof2.clone());
-        assert_eq!(MerklePath(vec![proof1.clone(), proof2.clone()]), m_path);
+        m_path.push_head(proof2.clone());
+        assert_eq!(MerklePath(vec![proof2.clone(), proof1.clone()]), m_path);
     }
 
     #[test]
     fn merkle_path_to_root_noop_hasher_test() {
         // Calculate merkle root hash of merkle path with substitution (noop hasher)
-        let m_path = merkle_path(vec!["Proof1", "Proof2", "Proof3"]);
+        let m_path = merkle_path(
+            vec!["Proof3", "Proof2", "Proof1"],
+            vec![Some(1), Some(1), Some(1)],
+        );
         let result = m_path.calc_merkle_root::<NoOpHasher>(Some(Hash::from_str("#new#")));
         assert_eq!(
             result.to_string(),
@@ -310,7 +325,10 @@ mod tests {
     #[test]
     fn merkle_path_to_root_without_substitution_noop_hasher_test() {
         // Calculate merkle root hash of merkle path without substitution
-        let m_path = merkle_path(vec!["Proof1", "Proof2", "Proof3"]);
+        let m_path = merkle_path(
+            vec!["Proof3", "Proof2", "Proof1"],
+            vec![None, Some(1), Some(1)],
+        );
         let result = m_path.calc_merkle_root::<NoOpHasher>(None);
         assert_eq!(
             result.to_string(),
@@ -319,7 +337,7 @@ mod tests {
         )
     }
 
-    fn node_proof(state: &str) -> NodeProof {
+    fn node_proof(state: &str, idx: Option<usize>) -> NodeProof {
         NodeProof {
             state_hash: Hash(BytesMut::from(state)),
             children_hashes: vec![
@@ -327,14 +345,14 @@ mod tests {
                 Hash::from_str("Child2"),
                 Hash::from_str("Child3"),
             ],
-            substitution_idx: Some(1),
+            substitution_idx: idx,
         }
     }
 
-    fn merkle_path(proofs: Vec<&str>) -> MerklePath {
+    fn merkle_path(proofs: Vec<&str>, indexes: Vec<Option<usize>>) -> MerklePath {
         let mut m_path = MerklePath::empty();
-        for proof in proofs {
-            m_path.add(node_proof(proof));
+        for (proof, idx) in proofs.into_iter().zip(indexes) {
+            m_path.push_head(node_proof(proof, idx));
         }
         m_path
     }

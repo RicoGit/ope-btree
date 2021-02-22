@@ -4,7 +4,7 @@ use crate::ope_btree::internal::node_store::BinaryNodeStore;
 use crate::ope_btree::{BTreeErr, NodeId, Result, ValueRef};
 use common::gen::NumGen;
 use kvstore_api::kvstore::KVStore;
-use protocol::{BtreeCallback, SearchCallback};
+use protocol::{BtreeCallback, SearchCallback, SearchResult};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -50,7 +50,7 @@ where
     /// `branch` Branch node for searching
     ///
     /// Returns index of searched child and the child
-    pub async fn search_child(&self, branch: BranchNode) -> Result<FoundChild> {
+    pub async fn search_child(&mut self, branch: BranchNode) -> Result<FoundChild> {
         let found_clild_idx = self.cmd.next_child_idx(branch.clone()).await?;
         let node_id = *branch.children_refs.get(found_clild_idx).ok_or_else(|| {
             BTreeErr::node_not_found(
@@ -86,7 +86,7 @@ where
 {
     /// Traverses tree and finds returns ether None or leaf, client makes decision.
     /// It's hard to write recursion here, because it required BoxFuture with Send + Sync + 'static,
-    pub async fn get_for_node(self, node: Node) -> Result<Option<ValueRef>> {
+    pub async fn get_for_node(mut self, node: Node) -> Result<Option<ValueRef>> {
         let mut current_node = node;
         loop {
             if current_node.is_empty() {
@@ -111,7 +111,7 @@ where
         let response = self.cmd.submit_leaf(leaf.clone()).await?;
 
         match response {
-            Ok(idx) => {
+            SearchResult(Ok(idx)) => {
                 // if client returns index, fetch value for this index and send it to client
                 let value_ref = leaf.val_refs.get(idx).cloned();
                 Ok(value_ref)

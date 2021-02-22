@@ -63,10 +63,10 @@ impl BTreeErr {
         }
     }
 
-    fn node_not_found(ixd: NodeId, details: &str) -> BTreeErr {
+    fn node_not_found(idx: NodeId, details: &str) -> BTreeErr {
         BTreeErr::illegal_state(&format!(
             "Node not found for specified idx={} ({})",
-            ixd, details
+            idx, details
         ))
     }
 }
@@ -248,7 +248,7 @@ where
             );
 
             // send the merkle path to the client for verification
-            let leaf_proof = NodeProof::new(Hash::empty(), new_leaf.kv_hashes.clone(), Some(0));
+            let leaf_proof = NodeProof::new(Hash::empty(), new_leaf.kv_hashes.clone(), None);
             let state_signed_by_client = cmd
                 .verify_changes::<D>(MerklePath::new(leaf_proof), false)
                 .await?;
@@ -446,7 +446,7 @@ mod tests {
         let put_details_vec = vec![ClientPutDetails::new(
             "Key".into(),
             "ValHash".into(),
-            SearchResult::Err(0),
+            SearchResult(Err(0)),
         )];
         let verify_changes_vec = vec!["SignedRoot".into()];
         let cmd2 = Cmd::new(TestCallback::new(
@@ -459,13 +459,13 @@ mod tests {
         assert_eq!(signature, Bytes::from("SignedRoot"));
 
         // get value stored before
-        let submit_leaf_vec = vec![SearchResult::Ok(0)];
+        let submit_leaf_vec = vec![SearchResult(Ok(0))];
         let cmd3 = Cmd::new(TestCallback::new(vec![], submit_leaf_vec, vec![], vec![]));
         let res3 = tree.get(cmd3).await.unwrap();
         assert_eq!(res3, Some(res2)); // val_ref is the same as we got from put
 
         // get value non-stored before
-        let cmd4 = Cmd::new(TestCallback::for_get(vec![], vec![SearchResult::Err(1)]));
+        let cmd4 = Cmd::new(TestCallback::for_get(vec![], vec![SearchResult(Err(1))]));
         let res4 = tree.get(cmd4).await.unwrap();
         assert_eq!(res4, None);
     }
@@ -486,7 +486,7 @@ mod tests {
         create_3_depth_tree(&mut tree).await;
 
         // get K1
-        let submit_leaf_vec = vec![SearchResult::Ok(0)];
+        let submit_leaf_vec = vec![SearchResult(Ok(0))];
         let cmd1 = Cmd::new(TestCallback::new(
             vec![0, 0, 0],
             submit_leaf_vec,
@@ -514,7 +514,7 @@ mod tests {
                 vec![ClientPutDetails::new(
                     format!("K{}", idx).into(),
                     format!("V{}", idx).into(),
-                    SearchResult::Err(search_result_vec[idx - 1]),
+                    SearchResult(Err(search_result_vec[idx - 1])),
                 )],
                 vec!["*".into()],
             ));
