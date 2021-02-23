@@ -44,7 +44,7 @@ impl<Cb: SearchCallback> Cmd<Cb> {
     ///
     /// * `leaf` -  A leaf node of OpeBTree for searching.
     ///
-    pub async fn submit_leaf(&self, leaf: LeafNode) -> Result<SearchResult> {
+    pub async fn submit_leaf(&mut self, leaf: LeafNode) -> Result<SearchResult> {
         let LeafNode {
             keys,
             val_hashes: values_hashes,

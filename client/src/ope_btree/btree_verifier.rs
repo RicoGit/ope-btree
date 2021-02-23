@@ -59,6 +59,13 @@ impl<D: Digest> BTreeVerifier<D> {
         NodeProof::new_proof::<D>(keys, children_checksums, substitution_idx)
     }
 
+    /// Returns [`NodeProof`] for leaf details from server.
+    /// `keys` Keys of leaf for verify
+    /// `values_checksums` Checksums of leaf values for verify
+    pub fn get_leaf_proof(&self, keys: Vec<Key>, values_checksums: Vec<Hash>) -> NodeProof {
+        NodeProof::new_proof::<D>(keys, values_checksums, None)
+    }
+
     /// Checks 'server's proof' correctness. Calculates proof checksums and compares it with expected checksum.
     /// `server_proof` A [[NodeProof]] of branch/leaf for verify from server
     /// `m_root` The merkle root of server tree (provides by client)
@@ -116,13 +123,6 @@ impl<D: Digest> BTreeVerifier<D> {
     ) -> Hash {
         // todo implement, not it returns server merkle root as is without checking
         server_m_root
-    }
-
-    /// Returns [`NodeProof`] for leaf details from server.
-    /// `keys` Keys of leaf for verify
-    /// `values_checksums` Checksums of leaf values for verify
-    fn get_leaf_proof(&self, keys: Vec<Key>, values_checksums: Vec<Hash>) -> NodeProof {
-        NodeProof::new_proof::<D>(keys, values_checksums, None)
     }
 
     /// Returns expected checksum of next branch that should be returned from server.

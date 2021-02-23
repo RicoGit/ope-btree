@@ -9,11 +9,13 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ProtocolError {
     #[error("Rpc Error: {msg:?}")]
-    RpcError { msg: String },
+    RpcErr { msg: String },
+    #[error("Verification: {msg:?}")]
+    VerificationErr { msg: String },
     // todo io error ?
 }
 
-type Result<V> = result::Result<V, ProtocolError>;
+pub type Result<V> = result::Result<V, ProtocolError>;
 
 /// Future that carries result of Rpc call.
 pub type RpcFuture<'f, V> = BoxFuture<'f, Result<V>>;
@@ -35,7 +37,7 @@ impl SearchResult {
 }
 
 /// Base parent for all callback wrappers needed for any BTree's operation.
-pub trait BtreeCallback: Send {
+pub trait BtreeCallback {
     /// Server asks next child node index (position).
     ///
     /// # Arguments
@@ -71,7 +73,7 @@ pub trait SearchCallback: BtreeCallback {
     /// Returns Err(idx) if key was found, Ok(idx) otherwise
     ///
     fn submit_leaf<'f>(
-        &self,
+        &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
     ) -> RpcFuture<'f, SearchResult>;

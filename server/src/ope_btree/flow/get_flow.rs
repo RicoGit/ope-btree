@@ -105,7 +105,7 @@ where
         }
     }
 
-    pub async fn get_for_leaf(self, leaf: LeafNode) -> Result<Option<ValueRef>> {
+    pub async fn get_for_leaf(mut self, leaf: LeafNode) -> Result<Option<ValueRef>> {
         log::debug!("GetFlow: Get for leaf={:?}", &leaf);
 
         let response = self.cmd.submit_leaf(leaf.clone()).await?;

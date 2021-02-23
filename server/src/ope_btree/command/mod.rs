@@ -86,7 +86,7 @@ pub mod tests {
 
     impl SearchCallback for TestCallback {
         fn submit_leaf<'f>(
-            &self,
+            &mut self,
             _keys: Vec<Bytes>,
             _values_hashes: Vec<Bytes>,
         ) -> RpcFuture<'f, SearchResult> {

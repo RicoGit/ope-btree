@@ -10,6 +10,7 @@ protocol = { path = "../protocol" }
 common = { path = "../common" }
 
 thiserror = "1.0"
+futures = "0.3"
 bytes = "1.0"
 serde = "1.0"
 rmp-serde = "0.13.7"
