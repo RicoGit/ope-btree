@@ -13,6 +13,7 @@ use std::fmt::Debug;
 
 pub mod btree_verifier;
 pub mod errors;
+mod put_state;
 mod search_state;
 
 pub type Result<V> = std::result::Result<V, ClientBTreeError>;

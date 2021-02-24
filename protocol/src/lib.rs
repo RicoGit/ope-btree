@@ -118,7 +118,7 @@ pub trait PutCallbacks: BtreeCallback {
     /// Details from client needed for inserting a key and a value to the BTree.
     ///
     fn put_details<'f>(
-        &self,
+        &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
     ) -> RpcFuture<'f, ClientPutDetails>;

@@ -163,14 +163,6 @@ impl MerklePath {
         proof.children_hashes.get(idx)
     }
 
-    pub fn insert_child_hash_to_last_proof2(&mut self, child_hash: Hash) {
-        self.0.last_mut().and_then(|last_proof| {
-            last_proof
-                .substitution_idx
-                .map(|idx| last_proof.children_hashes.insert(idx, child_hash))
-        });
-    }
-
     /// If last proof exists, adds to it child_hash on substitution position
     pub fn insert_child_hash_to_last_proof(&mut self, child_hash: Hash, idx: usize) {
         self.0

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 
 use bytes::Bytes;
 
@@ -8,7 +8,9 @@ use crate::ope_btree::Searcher;
 use common::merkle::MerklePath;
 use common::{Digest, Hash};
 use futures::future::FutureExt;
-use protocol::{BtreeCallback, ProtocolError, RpcFuture, SearchCallback, SearchResult};
+use protocol::{BtreeCallback, RpcFuture, SearchCallback, SearchResult};
+
+// todo make State enum, enum State { Search (...), Put {...} } ?
 
 /// State for each search ('Get', 'Range', 'Delete') request to remote BTree.
 /// One 'SearchState' corresponds to one series of round trip requests.
@@ -47,10 +49,8 @@ where
         children_hashes: Vec<Bytes>,
     ) -> RpcFuture<'f, usize> {
         log::debug!(
-            "next_child_idx starts for key={:?}, merkle_root={:?}, m_path={:?}, keys={:?}, children_hashes={:?}",
-            self.key,
-            self.m_root,
-            self.m_path,
+            "next_child_idx starts for {:?}, keys={:?}, children_hashes={:?}",
+            self,
             keys,
             children_hashes
         );
@@ -69,9 +69,7 @@ where
                 self.m_path = m_path;
                 idx
             })
-            .map_err(|_err| ProtocolError::VerificationErr {
-                msg: "Checksum of branch didn't pass verifying ...".to_string(), // todo impl From
-            });
+            .map_err(Into::into);
 
         async move { result }.boxed()
     }
@@ -90,7 +88,12 @@ where
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
     ) -> RpcFuture<'f, SearchResult> {
-        log::debug!("submit_leaf starts for key={:?}, merkle_root={:?}, m_path={:?}, keys={:?}, value_hashes:{:?}", self.key, self.m_root, self.m_path, keys, values_hashes);
+        log::debug!(
+            "submit_leaf starts for {:?} keys={:?}, value_hashes:{:?}",
+            self,
+            keys,
+            values_hashes
+        );
 
         let result = self
             .searcher
@@ -105,12 +108,18 @@ where
                 self.m_path = m_path;
                 search_res
             })
-            .map_err(|_err| {
-                ProtocolError::VerificationErr {
-                msg: "Checksum of leaf didn't pass verifying for key=$key, Leaf(${keys)}, ${valuesChecksums})".to_string(), // todo impl From
-            }
-            });
+            .map_err(Into::into);
 
         async move { result }.boxed()
+    }
+}
+
+impl<K: Debug, D, Dec> Debug for SearchState<K, D, Dec> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "SearchState(key:{:?}, m_root:{:?}, m_path:{:?})",
+            self.key, self.m_root, self.m_path
+        )
     }
 }

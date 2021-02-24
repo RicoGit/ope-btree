@@ -38,6 +38,7 @@ pub mod tests {
     /// Stub Callback for testing
     #[derive(Clone, Debug)]
     pub struct TestCallback {
+        // todo remove Cells
         next_child_idx_vec: RefCell<Vec<usize>>,
         submit_leaf_vec: RefCell<Vec<SearchResult>>,
         put_details_vec: RefCell<Vec<ClientPutDetails>>,
@@ -102,7 +103,7 @@ pub mod tests {
 
     impl PutCallbacks for TestCallback {
         fn put_details<'f>(
-            &self,
+            &mut self,
             _keys: Vec<Bytes>,
             _values_hashes: Vec<Bytes>,
         ) -> RpcFuture<'f, ClientPutDetails> {

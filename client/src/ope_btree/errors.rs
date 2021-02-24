@@ -18,7 +18,7 @@ pub enum ClientBTreeError {
         source: CryptoError,
     },
     #[error("Verification Error: {msg:?}")]
-    VerificationErr { msg: String },
+    VerificationErr { msg: String, m_root: Hash },
 }
 
 impl ClientBTreeError {
@@ -30,12 +30,24 @@ impl ClientBTreeError {
     ) -> ClientBTreeError {
         ClientBTreeError::VerificationErr {
             msg: format!(
-                "Checksum of branch didn't pass verifying for key={:?}, Branch({:?}, {:?}), merkle root={:?}",
-                key,
-                keys,
-                children,
-                m_root
+                "Checksum didn't pass verifying for key={:?}, Node({:?}, {:?}), merkle root={:?}",
+                key, keys, children, m_root
             ),
+            m_root,
+        }
+    }
+}
+
+impl From<ClientBTreeError> for ProtocolError {
+    fn from(err: ClientBTreeError) -> Self {
+        match err {
+            ClientBTreeError::ProtocolErr { source } => source,
+            err @ ClientBTreeError::CryptoErr { .. } => ProtocolError::VerificationErr {
+                msg: format!("{:?}", err),
+            },
+            err @ ClientBTreeError::VerificationErr { .. } => ProtocolError::VerificationErr {
+                msg: format!("{:?}", err),
+            },
         }
     }
 }
