@@ -135,7 +135,7 @@ pub trait PutCallbacks: BtreeCallback {
     /// Returns signed by client new merkle root as bytes.
     ///
     fn verify_changes<'f>(
-        &self,
+        &mut self,
         server_merkle_root: Bytes,
         was_splitting: bool,
     ) -> RpcFuture<'f, Bytes>;

@@ -117,7 +117,7 @@ pub mod tests {
         }
 
         fn verify_changes<'f>(
-            &self,
+            &mut self,
             _server_merkle_root: Bytes,
             _was_splitting: bool,
         ) -> RpcFuture<'f, Bytes> {

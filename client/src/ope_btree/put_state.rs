@@ -1,4 +1,5 @@
 use crate::crypto::{Decryptor, Encryptor};
+use crate::ope_btree::errors::ClientBTreeError;
 use crate::ope_btree::Searcher;
 use bytes::Bytes;
 use common::merkle::MerklePath;
@@ -21,13 +22,16 @@ pub struct PutState<Key, Digest, Decryptor, Encryptor> {
     m_path: MerklePath,
     /// Dataset version expected to the client
     version: usize,
+    /// All details needed for putting key and value to BTree
+    put_details: Option<ClientPutDetails>,
+
     /// Provides search over encrypted data
     searcher: Searcher<Digest, Decryptor>,
     /// Encrypts keys
     encryptor: Encryptor,
 }
 
-impl<Key: Debug + Clone, D, Dec, Enc> PutState<Key, D, Dec, Enc> {
+impl<Key: Debug, D, Dec, Enc> PutState<Key, D, Dec, Enc> {
     fn new(
         key: Key,
         value_checksum: Hash,
@@ -43,9 +47,14 @@ impl<Key: Debug + Clone, D, Dec, Enc> PutState<Key, D, Dec, Enc> {
             m_path,
             m_root,
             version,
+            put_details: None, // will filled on put_details step
             searcher,
             encryptor,
         }
+    }
+
+    pub fn get_client_root(&self) -> &Hash {
+        &self.m_root
     }
 }
 
@@ -129,11 +138,13 @@ where
                 self.encryptor
                     .encrypt(self.key.clone())
                     .map(|encrypted_key| {
-                        ClientPutDetails::new(
+                        let details = ClientPutDetails::new(
                             encrypted_key,
                             self.value_checksum.clone().bytes(),
                             search_res,
-                        )
+                        );
+                        self.put_details.replace(details.clone());
+                        details
                     })
                     .map_err(Into::into)
             })
@@ -142,16 +153,56 @@ where
         async move { result }.boxed()
     }
 
+    /// Case when server asks verify made changes
     fn verify_changes<'f>(
-        &self,
-        _server_merkle_root: Bytes,
-        _was_splitting: bool,
+        &mut self,
+        server_merkle_root: Bytes,
+        was_split: bool,
     ) -> RpcFuture<'f, Bytes> {
-        unimplemented!()
+        log::debug!(
+            "verify_changes starts for {:?}, server_merkle_root:{:?}, was_split:{:?}",
+            self,
+            server_merkle_root,
+            was_split
+        );
+
+        if let Some(put_details) = self.put_details.clone() {
+            if let Some(new_m_root) = self.searcher.verifier.new_merkle_root(
+                self.m_path.clone(),
+                put_details,
+                Hash::from(server_merkle_root.clone()),
+                was_split,
+            ) {
+                // all is fine, send Confirm to server
+
+                // todo here client should signs version with new merkle root
+                // todo it looks like not responsibility of PutState, it should be moved outside,
+                // todo for example as callback like 'make_signature_made_changes' or smth like that
+                let signed_state = Bytes::new();
+
+                // safe new merkle root on the client
+                self.m_root = new_m_root;
+
+                async move { Ok(signed_state) }.boxed()
+            } else {
+                // server was failed verification
+                let error = ClientBTreeError::wrong_put_proof(&self, &server_merkle_root).into();
+                async move { Err(error) }.boxed()
+            }
+        } else {
+            // illegal state from prev step
+            let error = ClientBTreeError::illegal_state(&self.key, &self.m_root).into();
+            async move { Err(error) }.boxed()
+        }
     }
 
+    /// Case when server confirmed changes persisted
     fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
-        unimplemented!()
+        // change global client state with new merkle root
+        log::debug!("changes_stored starts for state={:?}", self);
+
+        // todo set self.m_root to BTreeClient or somewhere else, updated m_root will be use in next request
+        async { Ok(()) }.boxed()
     }
 }
 

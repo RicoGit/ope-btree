@@ -1,4 +1,6 @@
 use crate::crypto::errors::CryptoError;
+use crate::ope_btree::put_state::PutState;
+use bytes::Bytes;
 use common::Hash;
 use protocol::ProtocolError;
 use std::fmt::Debug;
@@ -19,6 +21,8 @@ pub enum ClientBTreeError {
     },
     #[error("Verification Error: {msg:?}")]
     VerificationErr { msg: String, m_root: Hash },
+    #[error("Illegal State Error: {msg:?}")]
+    IllegalStateErr { msg: String },
 }
 
 impl ClientBTreeError {
@@ -30,10 +34,33 @@ impl ClientBTreeError {
     ) -> ClientBTreeError {
         ClientBTreeError::VerificationErr {
             msg: format!(
-                "Checksum didn't pass verifying for key={:?}, Node({:?}, {:?}), merkle root={:?}",
+                "Verify NodeProof failed for key={:?}, Node({:?}, {:?}), merkle root={:?}",
                 key, keys, children, m_root
             ),
             m_root,
+        }
+    }
+
+    pub fn wrong_put_proof<Key: Debug, D, Dec, Enc>(
+        put_state: &PutState<Key, D, Dec, Enc>,
+        server_m_root: &Bytes,
+    ) -> ClientBTreeError {
+        let client_m_root = put_state.get_client_root().clone();
+        ClientBTreeError::VerificationErr {
+            msg: format!(
+                "Verify server's Put failed for server_m_root={:?}, client_m_root={:?}, state={:?}",
+                server_m_root, &client_m_root, put_state
+            ),
+            m_root: client_m_root,
+        }
+    }
+
+    pub fn illegal_state<Key: Debug>(key: &Key, m_root: &Hash) -> ClientBTreeError {
+        ClientBTreeError::IllegalStateErr {
+            msg: format!(
+                "Client put details isn't defined, it's should be defined at previous step, key: {:?}, merkel root={:?}",
+                key, m_root
+            ),
         }
     }
 }
@@ -46,6 +73,9 @@ impl From<ClientBTreeError> for ProtocolError {
                 msg: format!("{:?}", err),
             },
             err @ ClientBTreeError::VerificationErr { .. } => ProtocolError::VerificationErr {
+                msg: format!("{:?}", err),
+            },
+            err @ ClientBTreeError::IllegalStateErr { .. } => ProtocolError::VerificationErr {
                 msg: format!("{:?}", err),
             },
         }
