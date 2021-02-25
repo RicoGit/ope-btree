@@ -416,11 +416,10 @@ impl<T: ToBytes + Clone> AsBytes for Vec<T> {
 #[cfg(test)]
 pub mod tests {
     use bytes::BytesMut;
-    use rmp_serde::{Deserializer, Serializer};
-    use serde::{Deserialize, Serialize};
-
     use common::noop_hasher::NoOpHasher;
     use common::Hash;
+    use rmp_serde::{Deserializer, Serializer};
+    use serde::{Deserialize, Serialize};
 
     use crate::ope_btree::internal::node::LeafNode;
 

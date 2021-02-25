@@ -15,6 +15,8 @@ use std::fmt::Debug;
 
 pub mod btree_verifier;
 pub mod errors;
+#[cfg(test)]
+mod integration_test;
 mod put_state;
 mod search_state;
 

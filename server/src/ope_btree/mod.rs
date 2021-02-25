@@ -4,7 +4,6 @@
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-
 use crate::ope_btree::command::{Cmd, CmdError};
 use crate::ope_btree::internal::node::{LeafNode, Node, NodeWithId};
 use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
@@ -12,7 +11,7 @@ use crate::ope_btree::internal::tree_path::TreePath;
 use bytes::Bytes;
 use common::gen::{Generator, NumGen};
 use common::merkle::{MerkleError, MerklePath, NodeProof};
-use common::{Digest, Hash};
+use common::Hash;
 use flow::get_flow::GetFlow;
 use flow::put_flow::{PutFlow, PutTask};
 use kvstore_api::kvstore::KVStore;
@@ -112,7 +111,7 @@ pub struct OpeBTreeConf {
 ///
 /// [`BinaryNodeStore`]: internal/node_store/struct.BinaryNodeStore.html
 /// [`Cmd`]: commands/struct.Cmd.html
-pub struct OpeBTree<Store, D>
+pub struct OpeBTree<Store, Digest>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
 {
@@ -129,13 +128,13 @@ where
     /// Min number of keys in node
     min_degree: usize,
 
-    phantom_data: PhantomData<D>,
+    phantom_data: PhantomData<Digest>,
 }
 
-impl<Store, D> OpeBTree<Store, D>
+impl<Store, Digest> OpeBTree<Store, Digest>
 where
     Store: KVStore<Vec<u8>, Vec<u8>>,
-    D: Digest + 'static,
+    Digest: common::Digest + 'static,
 {
     pub fn new(
         config: OpeBTreeConf,
@@ -241,7 +240,7 @@ where
             // send to client empty details, client answers with put details
             let put_details = cmd.cb.put_details(vec![], vec![]).await?;
             let value_ref = self.val_ref_gen.lock().await.next();
-            let new_leaf = LeafNode::new::<D>(
+            let new_leaf = LeafNode::new::<Digest>(
                 put_details.key.into(),
                 value_ref.clone(),
                 put_details.val_hash.into(),
@@ -250,7 +249,7 @@ where
             // send the merkle path to the client for verification
             let leaf_proof = NodeProof::new(Hash::empty(), new_leaf.kv_hashes.clone(), None);
             let state_signed_by_client = cmd
-                .verify_changes::<D>(MerklePath::new(leaf_proof), false)
+                .verify_changes::<Digest>(MerklePath::new(leaf_proof), false)
                 .await?;
 
             // Safe changes
@@ -262,7 +261,7 @@ where
             self.commit_new_state(task, &state_signed_by_client).await?;
             Ok((value_ref, state_signed_by_client))
         } else {
-            let flow = PutFlow::<_, _, D>::new(
+            let flow = PutFlow::<_, _, Digest>::new(
                 cmd,
                 self.node_store.clone(),
                 self.val_ref_gen.clone(),

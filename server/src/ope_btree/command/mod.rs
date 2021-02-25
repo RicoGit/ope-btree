@@ -27,7 +27,6 @@ impl<Cb> Cmd<Cb> {
 
 #[cfg(test)]
 pub mod tests {
-
     use bytes::Bytes;
     use futures::FutureExt;
     use protocol::{

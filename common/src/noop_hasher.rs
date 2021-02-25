@@ -6,6 +6,7 @@ use digest::generic_array::GenericArray;
 use digest::{Digest, Output};
 use std::string::ToString;
 
+#[derive(Clone, Debug)]
 pub struct NoOpHasher {
     /// Characters that wrap hashed string around.
     wrapper: (char, char),
@@ -106,7 +107,6 @@ impl Digest for NoOpHasher {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use crate::misc::AsString;
     use sha3::Digest;
