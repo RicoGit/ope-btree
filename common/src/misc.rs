@@ -1,8 +1,8 @@
 use super::{Bytes, Hash, Key};
 use crate::STR_END_SIGN;
 use bytes::BytesMut;
-use sha3::digest::generic_array::typenum::U512;
-use sha3::digest::generic_array::GenericArray;
+use digest::generic_array::typenum::U512;
+use digest::generic_array::GenericArray;
 
 impl From<Key> for BytesMut {
     fn from(key: Key) -> Self {

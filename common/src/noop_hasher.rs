@@ -1,10 +1,9 @@
 //! `No-operation` implementation for `Digest`, for debug purpose only.
 
 use crate::STR_END_SIGN;
-use sha3::digest::generic_array::typenum::U512;
-use sha3::digest::generic_array::GenericArray;
-use sha3::digest::Output;
-use sha3::Digest;
+use digest::generic_array::typenum::U512;
+use digest::generic_array::GenericArray;
+use digest::{Digest, Output};
 use std::string::ToString;
 
 pub struct NoOpHasher {

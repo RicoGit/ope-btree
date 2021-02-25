@@ -1,8 +1,7 @@
 use crate::{Hash, Key};
 use serde::{Deserialize, Serialize};
-use sha3::Digest;
-
 use crate::misc::ToBytes;
+use digest::Digest;
 use thiserror::Error;
 
 /// Merkle errors

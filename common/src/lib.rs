@@ -9,10 +9,9 @@ pub mod noop_hasher;
 use crate::misc::AsString;
 use bytes::{BufMut, Bytes, BytesMut};
 
+use digest::generic_array::{ArrayLength, GenericArray};
+pub use digest::Digest;
 use serde::{Deserialize, Serialize};
-use sha3::digest::generic_array::ArrayLength;
-use sha3::digest::generic_array::GenericArray;
-pub use sha3::Digest;
 use std::fmt::{Debug, Display, Formatter};
 
 pub const STR_END_SIGN: u8 = 0_u8;

@@ -1,13 +1,14 @@
 #![allow(dead_code)] // todo remove later
 
 use common::merkle::MerklePath;
-use common::{Digest, Hash};
+use common::Hash;
 
 use crate::crypto::cypher_search::CipherSearch;
 
-use crate::crypto::Decryptor;
+use crate::crypto::{Decryptor, Encryptor};
 use crate::ope_btree::btree_verifier::BTreeVerifier;
 use crate::ope_btree::errors::ClientBTreeError;
+use crate::ope_btree::search_state::SearchState;
 use protocol::SearchResult;
 use std::fmt::Debug;
 
@@ -18,18 +19,71 @@ mod search_state;
 
 pub type Result<V> = std::result::Result<V, ClientBTreeError>;
 
-// todo OpeBTreeClient
+/// Client to calls for a remote MerkleBTree.
+///  Note that this version is single-thread for Put operation, and multi-thread for Get operation.
+///
+/// `m_root` Current merkle root. For new dataset should be None
+/// `key_crypt` Encrypting/decrypting provider for Key
+/// `verifier` Arbiter for checking correctness of Btree server responses.
+/// `signer` Algorithm to produce signatures. Used for sealing current state by data owner
+pub struct OpeBTreeClient<Crypt, Digest> {
+    m_root: Hash,
+    key_crypt: Crypt,
+    verifier: BTreeVerifier<Digest>,
+    searcher: CipherSearch<Crypt>,
+    signer: (), // todo implement
+}
 
+impl<Key, Crypt, Digest> OpeBTreeClient<Crypt, Digest>
+where
+    Key: Ord + Clone + Debug,
+    Crypt: Encryptor<PlainData = Key> + Decryptor<PlainData = Key> + Clone,
+    Digest: common::Digest + Clone,
+{
+    pub fn new(m_root: Hash, key_crypt: Crypt, signer: ()) -> Self {
+        let searcher = CipherSearch::new(key_crypt.clone());
+        let verifier = BTreeVerifier::new();
+
+        OpeBTreeClient {
+            m_root,
+            key_crypt,
+            verifier,
+            searcher,
+            signer,
+        }
+    }
+
+    ///
+    /// Returns callbacks for finding 'value' by specified 'key' in remote OpeBTree.
+    ///
+    pub async fn init_get(&self, key: Key) -> SearchState<Key, Digest, Crypt> {
+        log::debug!("init_get starts for key={:?}", key);
+        self.build_search_state(key)
+    }
+
+    fn build_searcher(&self) -> Searcher<Digest, Crypt> {
+        Searcher {
+            verifier: self.verifier.clone(),
+            cipher_search: self.searcher.clone(),
+        }
+    }
+
+    fn build_search_state(&self, key: Key) -> SearchState<Key, Digest, Crypt> {
+        SearchState::new(key, self.m_root.clone(), self.build_searcher())
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Searcher<Digest, Decryptor> {
     pub verifier: BTreeVerifier<Digest>,
     cipher_search: CipherSearch<Decryptor>,
 }
 
-impl<Key, D, DD> Searcher<D, DD>
+impl<Key, Digest, Dec> Searcher<Digest, Dec>
 where
     Key: Ord + Debug,
-    D: Digest,
-    DD: Decryptor<PlainData = Key>,
+    Digest: common::Digest + Clone,
+    Dec: Decryptor<PlainData = Key>,
 {
     /// Verifies merkle proof for server response, after that search index of next child of branch.
     ///

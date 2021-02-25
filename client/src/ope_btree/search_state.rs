@@ -6,7 +6,7 @@ use crate::crypto::Decryptor;
 
 use crate::ope_btree::Searcher;
 use common::merkle::MerklePath;
-use common::{Digest, Hash};
+use common::Hash;
 use futures::future::FutureExt;
 use protocol::{BtreeCallback, RpcFuture, SearchCallback, SearchResult};
 
@@ -25,21 +25,21 @@ pub struct SearchState<Key, Digest, Decryptor> {
     searcher: Searcher<Digest, Decryptor>,
 }
 
-impl<Key, D, Dec> SearchState<Key, D, Dec> {
-    pub fn new(key: Key, m_root: Hash, m_path: MerklePath, searcher: Searcher<D, Dec>) -> Self {
+impl<Key, Digest: Clone, Dec> SearchState<Key, Digest, Dec> {
+    pub fn new(key: Key, m_root: Hash, searcher: Searcher<Digest, Dec>) -> Self {
         SearchState {
             key,
             m_root,
-            m_path,
+            m_path: MerklePath::empty(),
             searcher,
         }
     }
 }
 
-impl<Key, D, Dec> BtreeCallback for SearchState<Key, D, Dec>
+impl<Key, Digest, Dec> BtreeCallback for SearchState<Key, Digest, Dec>
 where
     Key: Ord + Debug + Clone + Send,
-    D: Digest,
+    Digest: common::Digest + Clone,
     Dec: Decryptor<PlainData = Key>,
 {
     /// Case when server asks next child
@@ -75,10 +75,10 @@ where
     }
 }
 
-impl<Key, D, Dec> SearchCallback for SearchState<Key, D, Dec>
+impl<Key, Digest, Dec> SearchCallback for SearchState<Key, Digest, Dec>
 where
     Key: Ord + Debug + Clone + Send,
-    D: Digest,
+    Digest: common::Digest + Clone,
     Dec: Decryptor<PlainData = Key>,
 {
     /// Case when server returns founded leaf, this leaf either contains key,

@@ -4,7 +4,7 @@ use crate::ope_btree::Searcher;
 use bytes::Bytes;
 use common::merkle::MerklePath;
 use common::misc::ToBytes;
-use common::{Digest, Hash};
+use common::Hash;
 use futures::FutureExt;
 use protocol::{BtreeCallback, ClientPutDetails, PutCallbacks, RpcFuture};
 use std::fmt::{Debug, Formatter};
@@ -31,14 +31,14 @@ pub struct PutState<Key, Digest, Decryptor, Encryptor> {
     encryptor: Encryptor,
 }
 
-impl<Key: Debug, D, Dec, Enc> PutState<Key, D, Dec, Enc> {
+impl<Key, Digest, Dec, Enc> PutState<Key, Digest, Dec, Enc> {
     fn new(
         key: Key,
         value_checksum: Hash,
         version: usize,
         m_root: Hash,
         m_path: MerklePath,
-        searcher: Searcher<D, Dec>,
+        searcher: Searcher<Digest, Dec>,
         encryptor: Enc,
     ) -> Self {
         PutState {
@@ -58,10 +58,10 @@ impl<Key: Debug, D, Dec, Enc> PutState<Key, D, Dec, Enc> {
     }
 }
 
-impl<Key, D, Dec, Enc> BtreeCallback for PutState<Key, D, Dec, Enc>
+impl<Key, Digest, Dec, Enc> BtreeCallback for PutState<Key, Digest, Dec, Enc>
 where
     Key: Ord + Debug + Clone + Send,
-    D: Digest,
+    Digest: common::Digest + Clone,
     Dec: Decryptor<PlainData = Key>,
     Enc: Encryptor<PlainData = Key>,
 {
@@ -98,10 +98,10 @@ where
     }
 }
 
-impl<Key, D, Dec, Enc> PutCallbacks for PutState<Key, D, Dec, Enc>
+impl<Key, Digest, Dec, Enc> PutCallbacks for PutState<Key, Digest, Dec, Enc>
 where
     Key: Ord + Debug + Clone + Send,
-    D: Digest,
+    Digest: common::Digest + Clone,
     Dec: Decryptor<PlainData = Key>,
     Enc: Encryptor<PlainData = Key>,
 {

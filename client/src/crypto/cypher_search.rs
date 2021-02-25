@@ -6,7 +6,7 @@ use common::Key;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CipherSearch<Decryptor> {
     pub decryptor: Decryptor,
 }

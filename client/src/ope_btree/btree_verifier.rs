@@ -2,15 +2,16 @@ use std::marker::PhantomData;
 
 use common::merkle::{MerklePath, NodeProof};
 
-use common::{Digest, Hash, Key};
+use common::{Hash, Key};
 use protocol::{ClientPutDetails, SearchResult};
 
 /// Arbiter for checking correctness of Btree server's responses.
-pub struct BTreeVerifier<D> {
-    _digest: PhantomData<D>,
+#[derive(Clone, Debug)]
+pub struct BTreeVerifier<Digest> {
+    _digest: PhantomData<Digest>,
 }
 
-impl<D: Digest> BTreeVerifier<D> {
+impl<Digest: common::Digest> BTreeVerifier<Digest> {
     pub fn new() -> Self {
         BTreeVerifier {
             _digest: PhantomData::default(),
@@ -56,14 +57,14 @@ impl<D: Digest> BTreeVerifier<D> {
         children_checksums: Vec<Hash>,
         substitution_idx: Option<usize>,
     ) -> NodeProof {
-        NodeProof::new_proof::<D>(keys, children_checksums, substitution_idx)
+        NodeProof::new_proof::<Digest>(keys, children_checksums, substitution_idx)
     }
 
     /// Returns [`NodeProof`] for leaf details from server.
     /// `keys` Keys of leaf for verify
     /// `values_checksums` Checksums of leaf values for verify
     pub fn get_leaf_proof(&self, keys: Vec<Key>, values_checksums: Vec<Hash>) -> NodeProof {
-        NodeProof::new_proof::<D>(keys, values_checksums, None)
+        NodeProof::new_proof::<Digest>(keys, values_checksums, None)
     }
 
     /// Checks 'server's proof' correctness. Calculates proof checksums and compares it with expected checksum.
@@ -71,7 +72,7 @@ impl<D: Digest> BTreeVerifier<D> {
     /// `m_root` The merkle root of server tree (provides by client)
     /// `m_path` The merkle path passed from tree root at this moment (provides by client)
     pub fn check_proof(&self, server_proof: NodeProof, m_root: Hash, m_path: MerklePath) -> bool {
-        let server_hash = server_proof.calc_checksum::<D>(None);
+        let server_hash = server_proof.calc_checksum::<Digest>(None);
         let client_hash = self.expected_checksum(m_root, m_path);
 
         let verifying_result = server_hash == client_hash;
@@ -94,22 +95,22 @@ impl<D: Digest> BTreeVerifier<D> {
         let mut encrypted_key = Hash::from(put_details.key);
         let val_checksum = Hash::from(put_details.val_hash);
         encrypted_key.concat(val_checksum); // todo hash it before concat?
-        let kv_hash = Hash::build::<D, _>(encrypted_key);
+        let kv_hash = Hash::build::<Digest, _>(encrypted_key);
 
         match put_details.search_result {
             SearchResult(Err(idx)) => {
                 // insertion
                 if client_m_path.is_empty() {
-                    client_m_path.calc_merkle_root::<D>(Some(kv_hash))
+                    client_m_path.calc_merkle_root::<Digest>(Some(kv_hash))
                 } else {
                     // we make fake insert: add hash to proof by idx from put_details and build root
                     client_m_path.insert_child_hash_to_last_proof(kv_hash, idx);
-                    client_m_path.calc_merkle_root::<D>(None)
+                    client_m_path.calc_merkle_root::<Digest>(None)
                 }
             }
             SearchResult(Ok(_)) => {
                 // replace
-                client_m_path.calc_merkle_root::<D>(Some(kv_hash))
+                client_m_path.calc_merkle_root::<Digest>(Some(kv_hash))
             }
         }
     }
