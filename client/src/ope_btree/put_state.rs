@@ -11,7 +11,7 @@ use std::fmt::{Debug, Formatter};
 
 /// State for each 'Put' request to remote BTree. One 'PutState' corresponds
 /// to one series of round trip requests
-pub struct PutState<Key, Digest, Decryptor, Encryptor> {
+pub struct PutState<Key, Digest, Crypt> {
     /// The search plain text 'key'
     key: Key,
     /// Checksum of encrypted value to be store
@@ -26,20 +26,20 @@ pub struct PutState<Key, Digest, Decryptor, Encryptor> {
     put_details: Option<ClientPutDetails>,
 
     /// Provides search over encrypted data
-    searcher: Searcher<Digest, Decryptor>,
+    searcher: Searcher<Digest, Crypt>,
     /// Encrypts keys
-    encryptor: Encryptor,
+    encryptor: Crypt,
 }
 
-impl<Key, Digest, Dec, Enc> PutState<Key, Digest, Dec, Enc> {
-    fn new(
+impl<Key, Digest, Crypt> PutState<Key, Digest, Crypt> {
+    pub fn new(
         key: Key,
         value_checksum: Hash,
-        version: usize,
         m_root: Hash,
         m_path: MerklePath,
-        searcher: Searcher<Digest, Dec>,
-        encryptor: Enc,
+        version: usize,
+        searcher: Searcher<Digest, Crypt>,
+        encryptor: Crypt,
     ) -> Self {
         PutState {
             key,
@@ -58,12 +58,11 @@ impl<Key, Digest, Dec, Enc> PutState<Key, Digest, Dec, Enc> {
     }
 }
 
-impl<Key, Digest, Dec, Enc> BtreeCallback for PutState<Key, Digest, Dec, Enc>
+impl<Key, Digest, Crypt> BtreeCallback for PutState<Key, Digest, Crypt>
 where
     Key: Ord + Debug + Clone + Send,
     Digest: common::Digest + Clone,
-    Dec: Decryptor<PlainData = Key>,
-    Enc: Encryptor<PlainData = Key>,
+    Crypt: Decryptor<PlainData = Key> + Encryptor<PlainData = Key>,
 {
     /// Case when server asks next child
     fn next_child_idx<'f>(
@@ -98,12 +97,11 @@ where
     }
 }
 
-impl<Key, Digest, Dec, Enc> PutCallbacks for PutState<Key, Digest, Dec, Enc>
+impl<Key, Digest, Crypt> PutCallbacks for PutState<Key, Digest, Crypt>
 where
     Key: Ord + Debug + Clone + Send,
     Digest: common::Digest + Clone,
-    Dec: Decryptor<PlainData = Key>,
-    Enc: Encryptor<PlainData = Key>,
+    Crypt: Decryptor<PlainData = Key> + Encryptor<PlainData = Key>,
 {
     /// Case when server returns founded leaf
     fn put_details<'f>(
@@ -206,7 +204,7 @@ where
     }
 }
 
-impl<K: Debug, D, Dec, Enc> Debug for PutState<K, D, Dec, Enc> {
+impl<K: Debug, Digest, Crypt> Debug for PutState<K, Digest, Crypt> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

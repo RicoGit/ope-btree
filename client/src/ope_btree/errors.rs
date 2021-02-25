@@ -41,8 +41,8 @@ impl ClientBTreeError {
         }
     }
 
-    pub fn wrong_put_proof<Key: Debug, D, Dec, Enc>(
-        put_state: &PutState<Key, D, Dec, Enc>,
+    pub fn wrong_put_proof<Key: Debug, Digest, Crypt>(
+        put_state: &PutState<Key, Digest, Crypt>,
         server_m_root: &Bytes,
     ) -> ClientBTreeError {
         let client_m_root = put_state.get_client_root().clone();

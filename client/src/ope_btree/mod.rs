@@ -8,6 +8,7 @@ use crate::crypto::cypher_search::CipherSearch;
 use crate::crypto::{Decryptor, Encryptor};
 use crate::ope_btree::btree_verifier::BTreeVerifier;
 use crate::ope_btree::errors::ClientBTreeError;
+use crate::ope_btree::put_state::PutState;
 use crate::ope_btree::search_state::SearchState;
 use protocol::SearchResult;
 use std::fmt::Debug;
@@ -61,6 +62,27 @@ where
         self.build_search_state(key)
     }
 
+    /// Returns callbacks for saving encrypted 'key' and 'value' into remote OpeBTree.
+    ///
+    /// `key` Plain text key
+    /// `value_checksum` Checksum of encrypted value to be store
+    /// `version`  Dataset version expected to the client
+    ///
+    pub async fn init_put(
+        &self,
+        key: Key,
+        value_checksum: Hash,
+        version: usize,
+    ) -> PutState<Key, Digest, Crypt> {
+        log::debug!(
+            "init_put starts put for key={:?}, value={:?}, version={:?}",
+            key,
+            value_checksum,
+            version
+        );
+        self.build_put_state(key, value_checksum, version)
+    }
+
     fn build_searcher(&self) -> Searcher<Digest, Crypt> {
         Searcher {
             verifier: self.verifier.clone(),
@@ -70,6 +92,24 @@ where
 
     fn build_search_state(&self, key: Key) -> SearchState<Key, Digest, Crypt> {
         SearchState::new(key, self.m_root.clone(), self.build_searcher())
+    }
+
+    fn build_put_state(
+        &self,
+        key: Key,
+        value_checksum: Hash,
+        version: usize,
+    ) -> PutState<Key, Digest, Crypt> {
+        let searcher = self.build_searcher();
+        PutState::new(
+            key,
+            value_checksum,
+            self.m_root.clone(),
+            MerklePath::empty(),
+            version,
+            searcher,
+            self.key_crypt.clone(),
+        )
     }
 }
 
