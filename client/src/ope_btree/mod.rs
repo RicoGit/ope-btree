@@ -12,6 +12,8 @@ use crate::ope_btree::put_state::PutState;
 use crate::ope_btree::search_state::SearchState;
 use protocol::SearchResult;
 use std::fmt::Debug;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub mod btree_verifier;
 pub mod errors;
@@ -24,17 +26,17 @@ pub type Result<V> = std::result::Result<V, ClientBTreeError>;
 
 /// Client to calls for a remote MerkleBTree.
 ///  Note that this version is single-thread for Put operation, and multi-thread for Get operation.
-///
-/// `m_root` Current merkle root. For new dataset should be None
-/// `key_crypt` Encrypting/decrypting provider for Key
-/// `verifier` Arbiter for checking correctness of Btree server responses.
-/// `signer` Algorithm to produce signatures. Used for sealing current state by data owner
 pub struct OpeBTreeClient<Crypt, Digest> {
-    m_root: Hash,
+    /// Encrypting/decrypting provider for Key
     key_crypt: Crypt,
+    /// Arbiter for checking correctness of Btree server responses.
     verifier: BTreeVerifier<Digest>,
+    /// Search over encrypted data algorithm
     searcher: CipherSearch<Crypt>,
+    /// Algorithm to produce signatures. Used for sealing current state by data owner
     signer: (), // todo implement
+    /// Client's state, actually current merkle root. For new dataset should be None.
+    state: Arc<RwLock<State>>,
 }
 
 impl<Key, Crypt, Digest> OpeBTreeClient<Crypt, Digest>
@@ -48,20 +50,20 @@ where
         let verifier = BTreeVerifier::new();
 
         OpeBTreeClient {
-            m_root,
             key_crypt,
             verifier,
             searcher,
             signer,
+            state: State::new(m_root),
         }
     }
 
     ///
     /// Returns callbacks for finding 'value' by specified 'key' in remote OpeBTree.
     ///
-    pub async fn init_get(&self, key: Key) -> SearchState<Key, Digest, Crypt> {
+    pub async fn init_get(&self, key: Key) -> SearchState<'_, Key, Digest, Crypt> {
         log::debug!("init_get starts for key={:?}", key);
-        self.build_search_state(key)
+        self.build_search_state(key).await
     }
 
     /// Returns callbacks for saving encrypted 'key' and 'value' into remote OpeBTree.
@@ -75,14 +77,14 @@ where
         key: Key,
         value_checksum: Hash,
         version: usize,
-    ) -> PutState<Key, Digest, Crypt> {
+    ) -> PutState<'_, Key, Digest, Crypt> {
         log::debug!(
             "init_put starts put for key={:?}, value={:?}, version={:?}",
             key,
             value_checksum,
             version
         );
-        self.build_put_state(key, value_checksum, version)
+        self.build_put_state(key, value_checksum, version).await
     }
 
     fn build_searcher(&self) -> Searcher<Digest, Crypt> {
@@ -92,25 +94,28 @@ where
         }
     }
 
-    fn build_search_state(&self, key: Key) -> SearchState<Key, Digest, Crypt> {
-        SearchState::new(key, self.m_root.clone(), self.build_searcher())
+    async fn build_search_state(&self, key: Key) -> SearchState<'_, Key, Digest, Crypt> {
+        let guard = self.state.read().await;
+        SearchState::new(key, guard, self.build_searcher())
     }
 
-    fn build_put_state(
+    async fn build_put_state(
         &self,
         key: Key,
         value_checksum: Hash,
         version: usize,
-    ) -> PutState<Key, Digest, Crypt> {
+    ) -> PutState<'_, Key, Digest, Crypt> {
         let searcher = self.build_searcher();
+        let guard = self.state.write().await;
+
         PutState::new(
             key,
             value_checksum,
-            self.m_root.clone(),
             MerklePath::empty(),
             version,
             searcher,
             self.key_crypt.clone(),
+            guard,
         )
     }
 }
@@ -205,5 +210,22 @@ where
                 m_root,
             ))
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct State {
+    m_root: Hash,
+}
+
+impl State {
+    pub fn new(m_root: Hash) -> Arc<RwLock<Self>> {
+        Arc::new(RwLock::new(State { m_root }))
+    }
+
+    pub fn empty() -> Arc<RwLock<Self>> {
+        Arc::new(RwLock::new(State {
+            m_root: Hash::empty(),
+        }))
     }
 }

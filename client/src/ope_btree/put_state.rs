@@ -1,6 +1,6 @@
 use crate::crypto::{Decryptor, Encryptor};
 use crate::ope_btree::errors::ClientBTreeError;
-use crate::ope_btree::Searcher;
+use crate::ope_btree::{Searcher, State};
 use bytes::Bytes;
 use common::merkle::MerklePath;
 use common::misc::ToBytes;
@@ -9,16 +9,15 @@ use futures::FutureExt;
 use protocol::{BtreeCallback, ClientPutDetails, PutCallbacks, RpcFuture};
 use std::fmt::{Debug, Formatter};
 
+use tokio::sync::RwLockWriteGuard;
+
 /// State for each 'Put' request to remote BTree. One 'PutState' corresponds
 /// to one series of round trip requests
-#[derive(Clone)]
-pub struct PutState<Key, Digest, Crypt> {
+pub struct PutState<'a, Key, Digest, Crypt> {
     /// The search plain text 'key'
     key: Key,
     /// Checksum of encrypted value to be store
     value_checksum: Hash,
-    /// Copy of client merkle root at the beginning of the request
-    m_root: Hash,
     /// Client's merkle path.Client during the traversing creates own version of merkle path
     m_path: MerklePath,
     /// Dataset version expected to the client
@@ -30,36 +29,57 @@ pub struct PutState<Key, Digest, Crypt> {
     searcher: Searcher<Digest, Crypt>,
     /// Encrypts keys
     encryptor: Crypt,
+
+    /// Write guard for current client state, while write guards are kept, read operations can't be start.
+    /// Contains client's merkle root at the beginning of the request. Constant for round trip session.
+
+    /// Contains either copy of state or guarded state.
+    /// `Err(State)` means that this is the copy of original PutState
+    /// `OK(RwLockWriteGuard<'a, State>)` means that it's original state and
+    /// after it will be dropped OpeBTree client will be able to make next request.
+    state: Result<RwLockWriteGuard<'a, State>, State>,
 }
 
-impl<Key, Digest, Crypt> PutState<Key, Digest, Crypt> {
+impl<'a, Key, Digest, Crypt> PutState<'a, Key, Digest, Crypt> {
     pub fn new(
         key: Key,
         value_checksum: Hash,
-        m_root: Hash,
         m_path: MerklePath,
         version: usize,
         searcher: Searcher<Digest, Crypt>,
         encryptor: Crypt,
+        state: RwLockWriteGuard<'a, State>,
     ) -> Self {
         PutState {
             key,
             value_checksum,
             m_path,
-            m_root,
             version,
             put_details: None, // will filled on put_details step
             searcher,
             encryptor,
+            state: Ok(state),
         }
     }
 
-    pub fn get_client_root(&self) -> &Hash {
-        &self.m_root
+    pub fn get_client_root(&self) -> Hash {
+        match &self.state {
+            Err(state) => state.m_root.clone(),
+            Ok(guard) => guard.m_root.clone(),
+        }
+    }
+
+    /// Safes new merkle root on the client
+    fn update_m_root(&mut self, new_m_root: Hash) {
+        if let Ok(guard) = &mut self.state {
+            guard.m_root = new_m_root;
+        } else {
+            panic!("Can't update m_root on a clone of PutState")
+        }
     }
 }
 
-impl<Key, Digest, Crypt> BtreeCallback for PutState<Key, Digest, Crypt>
+impl<'a, Key, Digest, Crypt> BtreeCallback for PutState<'a, Key, Digest, Crypt>
 where
     Key: Ord + Debug + Clone + Send,
     Digest: common::Digest + Clone,
@@ -83,7 +103,7 @@ where
             .search_in_branch(
                 // let (updated_m_path, idx) = self.searcher.search(
                 self.key.clone(),
-                self.m_root.clone(),
+                self.get_client_root(),
                 self.m_path.clone(),
                 keys.into_iter().map(common::Key::from).collect(),
                 children_hashes.into_iter().map(Hash::from).collect(),
@@ -98,7 +118,7 @@ where
     }
 }
 
-impl<Key, Digest, Crypt> PutCallbacks for PutState<Key, Digest, Crypt>
+impl<'a, Key, Digest, Crypt> PutCallbacks for PutState<'a, Key, Digest, Crypt>
 where
     Key: Ord + Debug + Clone + Send,
     Digest: common::Digest + Clone,
@@ -121,7 +141,7 @@ where
             .searcher
             .search_in_leaf(
                 self.key.clone(),
-                self.m_root.clone(),
+                self.get_client_root(),
                 self.m_path.clone(),
                 keys.into_iter().map(common::Key::from).collect(),
                 values_hashes.into_iter().map(Hash::from).collect(),
@@ -180,7 +200,7 @@ where
                 let signed_state = Bytes::new();
 
                 // safe new merkle root on the client
-                self.m_root = new_m_root;
+                self.update_m_root(new_m_root);
 
                 async move { Ok(signed_state) }.boxed()
             } else {
@@ -190,7 +210,7 @@ where
             }
         } else {
             // illegal state from prev step
-            let error = ClientBTreeError::illegal_state(&self.key, &self.m_root).into();
+            let error = ClientBTreeError::illegal_state(&self.key, &self.get_client_root()).into();
             async move { Err(error) }.boxed()
         }
     }
@@ -199,18 +219,41 @@ where
     fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
         // change global client state with new merkle root
         log::debug!("changes_stored starts for state={:?}", self);
-
-        // todo set self.m_root to BTreeClient or somewhere else, updated m_root will be use in next request
         async { Ok(()) }.boxed()
     }
 }
 
-impl<K: Debug, Digest, Crypt> Debug for PutState<K, Digest, Crypt> {
+impl<K: Debug, Digest, Crypt> Debug for PutState<'_, K, Digest, Crypt> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "PutState(key:{:?}, hash:{:?}, m_root:{:?}, m_path:{:?}, version:{:?})",
-            self.key, self.value_checksum, self.m_root, self.m_path, self.version
+            self.key,
+            self.value_checksum,
+            self.state.as_deref(),
+            self.m_path,
+            self.version
         )
+    }
+}
+
+/// Custom implementation of Clone that allows clone PutState without cloning guard of state.
+impl<'a, Key: Clone, Digest: Clone, Crypt: Clone> Clone for PutState<'a, Key, Digest, Crypt> {
+    fn clone(&self) -> Self {
+        let state: State = match &self.state {
+            Ok(guard) => (*guard).clone(),
+            Err(state) => state.clone(),
+        };
+        Self {
+            key: self.key.clone(),
+            value_checksum: self.value_checksum.clone(),
+            m_path: self.m_path.clone(),
+            version: self.version,
+            put_details: self.put_details.clone(),
+            searcher: self.searcher.clone(),
+            encryptor: self.encryptor.clone(),
+            // we returns copy of State, because RwLockWriteGuard can't be cloned
+            state: Err(state),
+        }
     }
 }

@@ -45,7 +45,7 @@ impl ClientBTreeError {
         put_state: &PutState<Key, Digest, Crypt>,
         server_m_root: &Bytes,
     ) -> ClientBTreeError {
-        let client_m_root = put_state.get_client_root().clone();
+        let client_m_root = put_state.get_client_root();
         ClientBTreeError::VerificationErr {
             msg: format!(
                 "Verify server's Put failed for server_m_root={:?}, client_m_root={:?}, state={:?}",

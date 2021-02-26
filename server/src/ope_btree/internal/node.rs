@@ -90,15 +90,7 @@ impl LeafNode {
 
     /// Returns array of checksums for each key-value pair
     fn build_kv_hashes<D: Digest>(keys: &[Key], values: &[Hash]) -> Vec<Hash> {
-        keys.iter()
-            .cloned()
-            .zip(values.iter().cloned())
-            .map(|(k, v)| {
-                let mut key: Hash = Hash::build::<D, _>(k);
-                key.concat(v);
-                Hash::build::<D, _>(key)
-            })
-            .collect()
+        NodeProof::calc_kv_hashes::<D>(keys, values)
     }
 
     /// Calculates checksum of leaf by folding ''kv_hashes''
@@ -253,7 +245,7 @@ impl BranchNode {
 
     /// Returns checksum of branch node
     pub fn branch_hash<D: Digest>(keys: Vec<Key>, children_hashes: Vec<Hash>) -> Hash {
-        NodeProof::new_proof::<D>(keys, children_hashes, None).calc_checksum::<D>(None)
+        NodeProof::new_branch_proof::<D>(keys, children_hashes, None).calc_checksum::<D>(None)
     }
 
     pub fn has_overflow(&self, max: usize) -> bool {
@@ -322,7 +314,7 @@ impl BranchNode {
     }
 
     pub fn to_proof<D: Digest>(&self, substitution_idx: Option<usize>) -> NodeProof {
-        NodeProof::new_proof::<D>(
+        NodeProof::new_branch_proof::<D>(
             self.keys.clone(),
             self.children_hashes.clone(),
             substitution_idx,

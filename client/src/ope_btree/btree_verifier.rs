@@ -57,14 +57,14 @@ impl<Digest: common::Digest> BTreeVerifier<Digest> {
         children_checksums: Vec<Hash>,
         substitution_idx: Option<usize>,
     ) -> NodeProof {
-        NodeProof::new_proof::<Digest>(keys, children_checksums, substitution_idx)
+        NodeProof::new_branch_proof::<Digest>(keys, children_checksums, substitution_idx)
     }
 
     /// Returns [`NodeProof`] for leaf details from server.
     /// `keys` Keys of leaf for verify
     /// `values_checksums` Checksums of leaf values for verify
     pub fn get_leaf_proof(&self, keys: Vec<Key>, values_checksums: Vec<Hash>) -> NodeProof {
-        NodeProof::new_proof::<Digest>(keys, values_checksums, None)
+        NodeProof::new_leaf_proof::<Digest>(&keys, &values_checksums, None)
     }
 
     /// Checks 'server's proof' correctness. Calculates proof checksums and compares it with expected checksum.
@@ -78,7 +78,7 @@ impl<Digest: common::Digest> BTreeVerifier<Digest> {
             m_root,
             m_path,
         );
-        let server_hash = server_proof.calc_checksum::<Digest>(None);
+        let server_hash = MerklePath::new(server_proof).calc_merkle_root::<Digest>(None);
         let client_hash = self.expected_checksum(m_root, m_path);
 
         let verifying_result = server_hash == client_hash;
@@ -100,23 +100,21 @@ impl<Digest: common::Digest> BTreeVerifier<Digest> {
     ) -> Hash {
         let mut encrypted_key = Hash::build::<Digest, _>(put_details.key);
         let val_checksum = Hash::from(put_details.val_hash);
-        encrypted_key.concat(val_checksum);
+        encrypted_key.concat(val_checksum.clone());
         let kv_hash = Hash::build::<Digest, _>(encrypted_key);
 
         match put_details.search_result {
             SearchResult(Err(idx)) => {
-                // insertion
-                if client_m_path.is_empty() {
-                    client_m_path.calc_merkle_root::<Digest>(Some(kv_hash))
-                } else {
-                    // we make fake insert: add hash to proof by idx from put_details and build root
-                    client_m_path.insert_child_hash_to_last_proof(kv_hash.clone(), idx);
-                    // todo None may be? why replace twice?
-                    client_m_path.calc_merkle_root::<Digest>(Some(kv_hash))
-                }
+                assert!(
+                    !client_m_path.is_empty(),
+                    "Client m_path should have at least one proof at this moment"
+                );
+                // we make fake insert: add hash to proof by idx from put_details and build root
+                client_m_path.insert_child_hash_to_last_proof(kv_hash.clone(), idx);
+                client_m_path.calc_merkle_root::<Digest>(Some(kv_hash)) // todo consider None instead
             }
             SearchResult(Ok(_)) => {
-                // replace
+                // replace old value with new one
                 client_m_path.calc_merkle_root::<Digest>(Some(kv_hash))
             }
         }

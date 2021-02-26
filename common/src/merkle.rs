@@ -29,7 +29,7 @@ pub type Result<V> = std::result::Result<V, MerkleError>;
 #[derive(Debug, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct NodeProof {
     /// A hash of node inner state, this hash does not contain hashes of a
-    /// child's nodes.
+    /// child's nodes. For leaf is always empty.
     state_hash: Hash,
     /// An array of child's hashes, which participates in the substitution.
     ///
@@ -66,7 +66,7 @@ impl NodeProof {
         }
     }
 
-    pub fn new_proof<D: Digest>(
+    pub fn new_branch_proof<D: Digest>(
         keys: Vec<Key>,
         children_hashes: Vec<Hash>,
         substitution_idx: Option<usize>,
@@ -78,10 +78,32 @@ impl NodeProof {
         )
     }
 
+    pub fn new_leaf_proof<D: Digest>(
+        keys: &[Key],
+        children_hashes: &[Hash],
+        substitution_idx: Option<usize>,
+    ) -> Self {
+        let kv_hashes = NodeProof::calc_kv_hashes::<D>(keys, children_hashes);
+        NodeProof::new(Hash::empty(), kv_hashes, substitution_idx)
+    }
+
     pub fn calc_keys_hash<D: Digest>(keys: Vec<Key>) -> Hash {
         let mut hash = Hash::empty();
         hash.concat_all(keys.into_iter().map(|key| Hash::build::<D, _>(key.bytes())));
         hash
+    }
+
+    /// Returns array of checksums for each key-value pair
+    pub fn calc_kv_hashes<D: Digest>(keys: &[Key], values: &[Hash]) -> Vec<Hash> {
+        keys.iter()
+            .cloned()
+            .zip(values.iter().cloned())
+            .map(|(k, v)| {
+                let mut key: Hash = Hash::build::<D, _>(k);
+                key.concat(v);
+                Hash::build::<D, _>(key)
+            })
+            .collect()
     }
 
     /// Calculates a checksum (hash) for the current node proof and the substituted value.
@@ -183,7 +205,8 @@ impl MerklePath {
 
         folded_path.unwrap_or_else(|| {
             substituted_checksum
-                .map(|cs| Hash::build::<D, _>(cs).into())
+                // case when one proof in merkle path: hash checksum is mandatory
+                .map(|cs| Hash::build::<D, _>(cs))
                 .unwrap_or_default()
         })
     }

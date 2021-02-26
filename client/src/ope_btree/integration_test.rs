@@ -45,11 +45,8 @@ async fn get_from_empty_tree_test() {
 
 #[tokio::test]
 async fn put_one_test() {
-    // put one value and get it back
-    let _ = env_logger::builder()
-        .is_test(true)
-        .filter_level(LevelFilter::Debug)
-        .try_init();
+    // put one value
+    init_logger();
 
     let mut tree = create_server().await;
     let client = create_client();
@@ -61,6 +58,29 @@ async fn put_one_test() {
     let put_state = client.init_put(k("k1"), h("v1"), 0).await;
     let cmd = Cmd::new(put_state);
     assert_eq!(tree.put(cmd).await.unwrap(), (vr(101), Bytes::new()))
+}
+
+#[tokio::test]
+async fn put_one_and_get_it_back_test() {
+    // put one value and get it back
+    init_logger();
+
+    let mut tree = create_server().await;
+    let client = create_client();
+
+    let search_state = client.init_get("k1".to_string()).await;
+    let cmd = Cmd::new(search_state);
+    assert_eq!(tree.get(cmd).await.unwrap(), None);
+
+    let put_state = client.init_put(k("k1"), h("v1"), 0).await;
+    let cmd = Cmd::new(put_state);
+    assert_eq!(tree.put(cmd).await.unwrap(), (vr(101), Bytes::new()));
+
+    dbg!(&client.state.read().await.m_root);
+
+    let search_state = client.init_get("k1".to_string()).await;
+    let cmd = Cmd::new(search_state);
+    assert_eq!(tree.get(cmd).await.unwrap(), Some(vr(101)));
 }
 
 fn create_client() -> OpeBTreeClient<NoOpKeyCrypt, NoOpHasher> {
@@ -94,4 +114,11 @@ fn vr(idx: usize) -> ValueRef {
     let mut buf = BytesMut::new();
     buf.put_u64(idx as u64);
     ValueRef(buf.freeze())
+}
+
+fn init_logger() {
+    let _ = env_logger::builder()
+        .is_test(true)
+        .filter_level(LevelFilter::Debug)
+        .try_init();
 }
