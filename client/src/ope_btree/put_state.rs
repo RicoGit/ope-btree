@@ -11,6 +11,7 @@ use std::fmt::{Debug, Formatter};
 
 /// State for each 'Put' request to remote BTree. One 'PutState' corresponds
 /// to one series of round trip requests
+#[derive(Clone)]
 pub struct PutState<Key, Digest, Crypt> {
     /// The search plain text 'key'
     key: Key,
@@ -126,7 +127,7 @@ where
                 values_hashes.into_iter().map(Hash::from).collect(),
             )
             .and_then(|(mut m_path, search_res)| {
-                // update idx in last proof
+                // update idx in last proof if exists
                 m_path
                     .0
                     .last_mut()

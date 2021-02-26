@@ -121,10 +121,11 @@ impl NodeProof {
             }
         };
 
-        // todo I'm not sure, @check this invariant
-        assert!(!state.is_empty(), "Empty NodeProof doesn't make any sense");
-
-        Hash::build::<D, _>(state)
+        if state.is_empty() {
+            state
+        } else {
+            Hash::build::<D, _>(state)
+        }
     }
 
     /// Updates substitution index

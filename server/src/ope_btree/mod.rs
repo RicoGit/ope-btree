@@ -1,9 +1,6 @@
 //! BTree implementation.
 //! todo more documentation when btree will be ready
 
-use std::marker::PhantomData;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use crate::ope_btree::command::{Cmd, CmdError};
 use crate::ope_btree::internal::node::{LeafNode, Node, NodeWithId};
 use crate::ope_btree::internal::node_store::{BinaryNodeStore, NodeStoreError};
@@ -17,6 +14,9 @@ use flow::put_flow::{PutFlow, PutTask};
 use kvstore_api::kvstore::KVStore;
 use protocol::{BtreeCallback, ProtocolError, PutCallbacks, SearchCallback};
 use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
@@ -222,9 +222,9 @@ where
     /// `cmd` A command for BTree execution (it's a 'bridge' for
     /// communicate with BTree client)
     ///
-    /// Returns reference to value that corresponds search Key. In update case
-    /// will be returned old reference, in insert case will be created new
-    /// reference to value
+    /// Returns reference to value that corresponds search Key and signed by client
+    /// updated state. In update case will be returned old reference, in insert
+    /// case will be created new reference to value
     pub async fn put<Cb>(&mut self, mut cmd: Cmd<Cb>) -> Result<(ValueRef, Bytes)>
     where
         Cb: PutCallbacks + BtreeCallback + Clone,
@@ -233,7 +233,6 @@ where
 
         let root = self.get_root().await?;
 
-        // todo verify changes in simple case
         if root.is_empty() {
             // if root is empty don't need to finding slot for putting
             log::debug!("Root node is empty, put in Root node");
