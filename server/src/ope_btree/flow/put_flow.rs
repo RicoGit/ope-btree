@@ -75,7 +75,11 @@ where
 
         loop {
             match current_node {
-                Node::Leaf(leaf) => return self.put_for_leaf(current_node_id, leaf, trail).await,
+                Node::Leaf(leaf) => {
+                    // todo we have to create fake @transport for solving this problem
+                    // self.cmd = get_flow.get_cmd();
+                    return self.put_for_leaf(current_node_id, leaf, trail).await;
+                }
                 Node::Branch(branch) => {
                     log::debug!(
                         "PutFlow: Put for branch_id={}, branch {:?}",

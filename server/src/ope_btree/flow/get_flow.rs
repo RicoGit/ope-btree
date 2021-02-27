@@ -76,6 +76,10 @@ where
         let node = lock.get(node_id).await?;
         Ok(node)
     }
+
+    pub fn get_cmd(self) -> Cmd<Cb> {
+        self.cmd
+    }
 }
 
 /// Implementation GetFlow for SearchCallback

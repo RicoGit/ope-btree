@@ -83,6 +83,60 @@ async fn put_one_and_get_it_back_test() {
     assert_eq!(tree.get(cmd).await.unwrap(), Some(vr(101)));
 }
 
+#[tokio::test]
+async fn fill_root_node_test() {
+    init_logger();
+    let mut tree = create_server().await;
+    let client = create_client();
+
+    // fill root node with 4 keys
+    put(5, &mut tree, &client).await;
+
+    // get all keys back
+    get(5, &mut tree, &client).await;
+}
+
+#[tokio::test]
+#[ignore]
+// todo we have to create fake @transport for solving this problem (we clone put_state and update m_path on the clone)
+async fn rebalancing_root_node_test() {
+    // put 10 and get it back
+    init_logger();
+
+    let mut tree = create_server().await;
+    let client = create_client();
+
+    // fill root node with 4 keys
+    put(7, &mut tree, &client).await;
+
+    // get all keys back
+    get(7, &mut tree, &client).await;
+}
+
+async fn put(
+    n: usize,
+    tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
+    client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
+) {
+    for idx in 1..n {
+        let put_state = client.init_put(key(idx), hash(idx), idx).await;
+        let cmd = Cmd::new(put_state);
+        assert_eq!(tree.put(cmd).await.unwrap(), (vr(100 + idx), Bytes::new()));
+    }
+}
+
+async fn get(
+    n: usize,
+    tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
+    client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
+) {
+    for idx in 1..n {
+        let get_state = client.init_get(key(idx)).await;
+        let cmd = Cmd::new(get_state);
+        assert_eq!(tree.get(cmd).await.unwrap(), Some(vr(100 + idx)));
+    }
+}
+
 fn create_client() -> OpeBTreeClient<NoOpKeyCrypt, NoOpHasher> {
     let crypt = NoOpKeyCrypt {};
     let client: OpeBTreeClient<NoOpKeyCrypt, NoOpHasher> =
@@ -106,8 +160,16 @@ fn h(str: &str) -> Hash {
     Hash::build::<NoOpHasher, _>(str.as_bytes())
 }
 
+fn hash(idx: usize) -> Hash {
+    Hash::build::<NoOpHasher, _>(format!("h{}", idx).as_bytes())
+}
+
 fn k(str: &str) -> String {
     str.to_string()
+}
+
+fn key(idx: usize) -> String {
+    format!("k{}", idx)
 }
 
 fn vr(idx: usize) -> ValueRef {

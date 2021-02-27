@@ -185,7 +185,7 @@ where
         &self,
         key: Key,
         m_root: Hash,
-        mut m_path: MerklePath,
+        mut m_path: MerklePath, // todo make &mut anf remove from return value
         keys: Vec<common::Key>,
         children_hashes: Vec<Hash>,
     ) -> Result<(MerklePath, SearchResult)> {

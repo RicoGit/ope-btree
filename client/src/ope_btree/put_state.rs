@@ -101,7 +101,6 @@ where
         let result = self
             .searcher
             .search_in_branch(
-                // let (updated_m_path, idx) = self.searcher.search(
                 self.key.clone(),
                 self.get_client_root(),
                 self.m_path.clone(),
