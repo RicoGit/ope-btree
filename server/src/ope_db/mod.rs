@@ -2,14 +2,17 @@
 //! as backend for persisting data.
 
 use crate::ope_btree::command::Cmd;
+use crate::ope_btree::internal::node::TreeNode;
 use crate::ope_btree::{BTreeErr, OpeBTree};
 use bytes::Bytes;
-use common::Digest;
+use common::{Digest, Hash};
 use kvstore_api::kvstore::KVStore;
 use kvstore_api::kvstore::*;
 use protocol::{BtreeCallback, PutCallback, SearchCallback};
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 
 #[derive(Error, Debug)]
@@ -24,6 +27,11 @@ pub enum DbError {
         #[from]
         source: KVStoreError,
     },
+    #[error("Update state Error")]
+    UpdateErr {
+        #[from]
+        source: SendError<DatasetChanged>,
+    },
 }
 
 pub type Result<V> = std::result::Result<V, DbError>;
@@ -37,6 +45,8 @@ where
     index: RwLock<OpeBTree<NS, D>>,
     /// Blob storage for persisting encrypted values.
     value_store: Arc<RwLock<VS>>,
+    /// OpeDatabase sends notification in this channel when state changed
+    update_channel: Sender<DatasetChanged>,
 }
 
 impl<NS, VS, D> OpeDatabase<NS, VS, D>
@@ -45,10 +55,11 @@ where
     VS: KVStore<Bytes, Bytes>,
     D: Digest + 'static,
 {
-    fn new(index: OpeBTree<NS, D>, store: VS) -> Self {
+    fn new(index: OpeBTree<NS, D>, store: VS, update_channel: Sender<DatasetChanged>) -> Self {
         OpeDatabase {
             index: RwLock::new(index),
             value_store: Arc::new(RwLock::new(store)),
+            update_channel,
         }
     }
 
@@ -88,7 +99,7 @@ where
     pub async fn put<'a, Scb>(
         &mut self,
         put_callback: Scb,
-        _version: usize,
+        version: usize,
         encrypted_value: Bytes,
     ) -> Result<Option<Bytes>>
     where
@@ -98,17 +109,18 @@ where
 
         // find place into index and get value reference
         let mut index_lock = self.index.write().await;
-        let (val_ref, _state_signed_by_client) = index_lock.put(Cmd::new(put_callback)).await?;
+        let (val_ref, state_signed_by_client) = index_lock.put(Cmd::new(put_callback)).await?;
 
         // safe new value to value store
         let mut val_store = self.value_store.write().await;
         let old_value = val_store.set(val_ref.0, encrypted_value).await?;
 
-        // todo increment expected client version by one and save somewhere client's signature + merkle root + version
+        let m_root = index_lock.get_root().await?.hash();
+        let new_version = version + 1;
 
-        // let root = index_lock.get_root().await?;
-        // let state_signed_by_client = state_signed_by_client
-        // let version = version + 1;
+        let changes = DatasetChanged::new(m_root, new_version, state_signed_by_client);
+
+        self.update_channel.send(changes).await?;
 
         Ok(old_value)
 
@@ -116,6 +128,24 @@ where
     }
 
     // todo remove, traverse
+}
+
+/// All data needed to persist changes from the outside of Database
+#[derive(Clone, Debug)]
+pub struct DatasetChanged {
+    new_m_root: Hash,
+    new_version: usize,
+    client_signature: Bytes,
+}
+
+impl DatasetChanged {
+    pub fn new(new_m_root: Hash, new_version: usize, client_signature: Bytes) -> Self {
+        DatasetChanged {
+            new_m_root,
+            new_version,
+            client_signature,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -127,17 +157,21 @@ mod tests {
     use common::gen::NumGen;
     use common::noop_hasher::NoOpHasher;
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
+    use tokio::sync::mpsc::channel;
 
     #[tokio::test]
     async fn new_test() {
+        let (tx, _rx) = channel::<DatasetChanged>(1);
         let index = create_tree(create_node_store(0));
-        let mut db = OpeDatabase::new(index, HashMapKVStore::new());
+        let mut db = OpeDatabase::new(index, HashMapKVStore::new(), tx);
         assert!(db.init().await.is_ok())
     }
 
     #[tokio::test]
     async fn get_test() {
-        let _db = create_db().await;
+        let (tx, _rx) = channel::<DatasetChanged>(1);
+        let _db = create_db(tx).await;
+
         // todo test later
     }
 
@@ -163,10 +197,11 @@ mod tests {
     }
 
     async fn create_db(
+        tx: Sender<DatasetChanged>,
     ) -> OpeDatabase<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>, NoOpHasher>
     {
         let index = create_tree(create_node_store(0));
-        let mut db = OpeDatabase::new(index, HashMapKVStore::new());
+        let mut db = OpeDatabase::new(index, HashMapKVStore::new(), tx);
         assert!(db.init().await.is_ok());
         db
     }

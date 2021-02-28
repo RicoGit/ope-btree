@@ -8,7 +8,7 @@ use thiserror::*;
 
 /// Client's BTree errors
 #[derive(Error, Debug)]
-pub enum ClientBTreeError {
+pub enum BTreeClientError {
     #[error("Protocol Error")]
     ProtocolErr {
         #[from]
@@ -25,14 +25,14 @@ pub enum ClientBTreeError {
     IllegalStateErr { msg: String },
 }
 
-impl ClientBTreeError {
+impl BTreeClientError {
     pub fn wrong_proof<Key: Debug>(
         key: Key,
         keys: Vec<common::Key>,
         children: Vec<Hash>,
         m_root: &Hash,
-    ) -> ClientBTreeError {
-        ClientBTreeError::VerificationErr {
+    ) -> BTreeClientError {
+        BTreeClientError::VerificationErr {
             msg: format!(
                 "Verify NodeProof failed for key={:?}, Node({:?}, {:?}), merkle root={:?}",
                 key, keys, children, m_root
@@ -43,8 +43,8 @@ impl ClientBTreeError {
     pub fn wrong_put_proof<Key: Debug, Digest, Crypt>(
         put_state: &PutState<Key, Digest, Crypt>,
         server_m_root: &Bytes,
-    ) -> ClientBTreeError {
-        ClientBTreeError::VerificationErr {
+    ) -> BTreeClientError {
+        BTreeClientError::VerificationErr {
             msg: format!(
                 "Verify server's Put failed for server_m_root={:?}, client_m_root={:?}, state={:?}",
                 server_m_root,
@@ -54,8 +54,8 @@ impl ClientBTreeError {
         }
     }
 
-    pub fn illegal_state<Key: Debug>(key: &Key, m_root: &Hash) -> ClientBTreeError {
-        ClientBTreeError::IllegalStateErr {
+    pub fn illegal_state<Key: Debug>(key: &Key, m_root: &Hash) -> BTreeClientError {
+        BTreeClientError::IllegalStateErr {
             msg: format!(
                 "Client put details isn't defined, it's should be defined at previous step, key: {:?}, merkel root={:?}",
                 key, m_root
@@ -64,17 +64,17 @@ impl ClientBTreeError {
     }
 }
 
-impl From<ClientBTreeError> for ProtocolError {
-    fn from(err: ClientBTreeError) -> Self {
+impl From<BTreeClientError> for ProtocolError {
+    fn from(err: BTreeClientError) -> Self {
         match err {
-            ClientBTreeError::ProtocolErr { source } => source,
-            err @ ClientBTreeError::CryptoErr { .. } => ProtocolError::VerificationErr {
+            BTreeClientError::ProtocolErr { source } => source,
+            err @ BTreeClientError::CryptoErr { .. } => ProtocolError::VerificationErr {
                 msg: format!("{:?}", err),
             },
-            err @ ClientBTreeError::VerificationErr { .. } => ProtocolError::VerificationErr {
+            err @ BTreeClientError::VerificationErr { .. } => ProtocolError::VerificationErr {
                 msg: format!("{:?}", err),
             },
-            err @ ClientBTreeError::IllegalStateErr { .. } => ProtocolError::VerificationErr {
+            err @ BTreeClientError::IllegalStateErr { .. } => ProtocolError::VerificationErr {
                 msg: format!("{:?}", err),
             },
         }

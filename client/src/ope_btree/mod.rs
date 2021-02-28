@@ -7,7 +7,7 @@ use crate::crypto::cypher_search::CipherSearch;
 
 use crate::crypto::{Decryptor, Encryptor};
 use crate::ope_btree::btree_verifier::BTreeVerifier;
-use crate::ope_btree::errors::ClientBTreeError;
+use crate::ope_btree::errors::BTreeClientError;
 use crate::ope_btree::put_state::PutState;
 use crate::ope_btree::search_state::SearchState;
 use protocol::SearchResult;
@@ -20,7 +20,7 @@ pub mod errors;
 mod put_state;
 mod search_state;
 
-pub type Result<V> = std::result::Result<V, ClientBTreeError>;
+pub type Result<V> = std::result::Result<V, BTreeClientError>;
 
 /// Client to calls for a remote MerkleBTree.
 ///  Note that this version is single-thread for Put operation, and multi-thread for Get operation.
@@ -163,7 +163,7 @@ where
             log::trace!("add node_proof to m_path after: {:?}", m_path);
             Ok(insertion_point)
         } else {
-            Err(ClientBTreeError::wrong_proof(
+            Err(BTreeClientError::wrong_proof(
                 key,
                 keys.clone(),
                 children_hashes,
@@ -205,7 +205,7 @@ where
             log::trace!("add leaf_proof to m_path after: {:?}", m_path);
             Ok(search_result)
         } else {
-            Err(ClientBTreeError::wrong_proof(
+            Err(BTreeClientError::wrong_proof(
                 key,
                 keys.clone(),
                 children_hashes,

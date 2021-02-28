@@ -1,5 +1,5 @@
 use crate::crypto::{Decryptor, Encryptor};
-use crate::ope_btree::errors::ClientBTreeError;
+use crate::ope_btree::errors::BTreeClientError;
 use crate::ope_btree::{Searcher, State};
 use bytes::Bytes;
 use common::merkle::MerklePath;
@@ -188,12 +188,12 @@ where
                 async move { Ok(signed_state) }.boxed()
             } else {
                 // server was failed verification
-                let error = ClientBTreeError::wrong_put_proof(&self, &server_merkle_root).into();
+                let error = BTreeClientError::wrong_put_proof(&self, &server_merkle_root).into();
                 async move { Err(error) }.boxed()
             }
         } else {
             // illegal state from prev step
-            let error = ClientBTreeError::illegal_state(&self.key, self.m_root()).into();
+            let error = BTreeClientError::illegal_state(&self.key, self.m_root()).into();
             async move { Err(error) }.boxed()
         }
     }
