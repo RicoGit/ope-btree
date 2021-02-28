@@ -12,7 +12,8 @@ use common::Hash;
 use flow::get_flow::GetFlow;
 use flow::put_flow::{PutFlow, PutTask};
 use kvstore_api::kvstore::KVStore;
-use protocol::{BtreeCallback, ProtocolError, PutCallback, SearchCallback};
+use protocol::btree::{BtreeCallback, PutCallback, SearchCallback};
+use protocol::ProtocolError;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -375,15 +376,12 @@ impl Generator for ValRefGen {
 
 #[cfg(test)]
 mod tests {
-    use kvstore_inmemory::hashmap_store::HashMapKVStore;
-
-    use common::noop_hasher::NoOpHasher;
-    use protocol::{ClientPutDetails, SearchResult};
-
+    use super::*;
     use crate::ope_btree::command::tests::TestCallback;
     use crate::ope_btree::command::Cmd;
-
-    use super::*;
+    use common::noop_hasher::NoOpHasher;
+    use kvstore_inmemory::hashmap_store::HashMapKVStore;
+    use protocol::btree::{ClientPutDetails, SearchResult};
 
     fn create_node_store(
         idx: NodeId,

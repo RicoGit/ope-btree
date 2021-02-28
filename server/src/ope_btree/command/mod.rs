@@ -29,9 +29,8 @@ impl<Cb> Cmd<Cb> {
 pub mod tests {
     use bytes::Bytes;
     use futures::FutureExt;
-    use protocol::{
-        BtreeCallback, ClientPutDetails, PutCallback, RpcFuture, SearchCallback, SearchResult,
-    };
+    use protocol::btree::*;
+    use protocol::RpcFuture;
 
     /// Stub Callback for testing
     #[derive(Clone, Debug)]

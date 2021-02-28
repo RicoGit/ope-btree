@@ -8,7 +8,7 @@ use bytes::Bytes;
 use common::{Digest, Hash};
 use kvstore_api::kvstore::KVStore;
 use kvstore_api::kvstore::*;
-use protocol::{BtreeCallback, PutCallback, SearchCallback};
+use protocol::btree::{BtreeCallback, PutCallback, SearchCallback};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;

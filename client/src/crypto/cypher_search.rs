@@ -1,6 +1,6 @@
 use crate::crypto::{Decryptor, Result};
 
-use protocol::SearchResult;
+use protocol::btree::SearchResult;
 
 use common::Key;
 use std::cmp::Ordering;

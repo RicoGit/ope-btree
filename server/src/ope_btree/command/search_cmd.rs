@@ -1,12 +1,9 @@
-use protocol::BtreeCallback;
-use protocol::SearchCallback;
-use protocol::SearchResult;
-
 use crate::ope_btree::command::Cmd;
 use crate::ope_btree::command::Result;
 use crate::ope_btree::internal::node::AsBytes;
 use crate::ope_btree::internal::node::BranchNode;
 use crate::ope_btree::internal::node::LeafNode;
+use protocol::btree::{BtreeCallback, SearchCallback, SearchResult};
 
 impl<Cb: BtreeCallback> Cmd<Cb> {
     /// Returns a next child index to makes the next step down the tree.

@@ -1,15 +1,12 @@
-use std::fmt::{Debug, Formatter};
-
-use bytes::Bytes;
-
 use crate::crypto::Decryptor;
-
 use crate::ope_btree::{Searcher, State};
+use bytes::Bytes;
 use common::merkle::MerklePath;
 use common::Hash;
 use futures::future::FutureExt;
-use protocol::{BtreeCallback, RpcFuture, SearchCallback, SearchResult};
-
+use protocol::btree::{BtreeCallback, SearchCallback, SearchResult};
+use protocol::RpcFuture;
+use std::fmt::{Debug, Formatter};
 use tokio::sync::RwLockReadGuard;
 
 /// State for each search ('Get', 'Range', 'Delete') request to remote BTree.

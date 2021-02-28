@@ -6,9 +6,9 @@ use common::merkle::MerklePath;
 use common::misc::ToBytes;
 use common::Hash;
 use futures::FutureExt;
-use protocol::{BtreeCallback, ClientPutDetails, PutCallback, RpcFuture};
+use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback};
+use protocol::RpcFuture;
 use std::fmt::{Debug, Formatter};
-
 use tokio::sync::RwLockWriteGuard;
 
 /// State for each 'Put' request to remote BTree. One 'PutState' corresponds

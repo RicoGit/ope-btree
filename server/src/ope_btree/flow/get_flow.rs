@@ -4,7 +4,7 @@ use crate::ope_btree::internal::node_store::BinaryNodeStore;
 use crate::ope_btree::{BTreeErr, NodeId, Result, ValueRef};
 use common::gen::NumGen;
 use kvstore_api::kvstore::KVStore;
-use protocol::{BtreeCallback, SearchCallback, SearchResult};
+use protocol::btree::{BtreeCallback, SearchCallback, SearchResult};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

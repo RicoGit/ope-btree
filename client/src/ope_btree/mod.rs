@@ -10,7 +10,7 @@ use crate::ope_btree::btree_verifier::BTreeVerifier;
 use crate::ope_btree::errors::BTreeClientError;
 use crate::ope_btree::put_state::PutState;
 use crate::ope_btree::search_state::SearchState;
-use protocol::SearchResult;
+use protocol::btree::SearchResult;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -237,7 +237,8 @@ pub mod test {
     use super::*;
     use bytes::Bytes;
     use common::noop_hasher::NoOpHasher;
-    use protocol::{BtreeCallback, ClientPutDetails, PutCallback, RpcFuture};
+    use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback};
+    use protocol::RpcFuture;
     use std::sync::Mutex;
 
     #[derive(Clone, Debug)]

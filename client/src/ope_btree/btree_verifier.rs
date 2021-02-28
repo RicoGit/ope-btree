@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use common::merkle::{MerklePath, NodeProof};
 
 use common::{Hash, Key};
-use protocol::{ClientPutDetails, SearchResult};
+use protocol::btree::{ClientPutDetails, SearchResult};
 
 /// Arbiter for checking correctness of Btree server's responses.
 #[derive(Clone, Debug)]
@@ -146,7 +146,7 @@ mod tests {
     use common::misc::ToBytes;
     use common::noop_hasher::NoOpHasher;
     use log::LevelFilter;
-    use protocol::SearchResult;
+    use protocol::btree::SearchResult;
 
     #[test]
     #[should_panic]

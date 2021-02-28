@@ -1,14 +1,3 @@
-use std::marker::PhantomData;
-use std::sync::Arc;
-
-use kvstore_api::kvstore::KVStore;
-use tokio::sync::{Mutex, RwLock};
-
-use common::gen::{Generator, NumGen};
-use common::merkle::MerklePath;
-use common::{Digest, Hash};
-use protocol::{ClientPutDetails, PutCallback, SearchResult};
-
 use crate::ope_btree::command::Cmd;
 use crate::ope_btree::flow::get_flow::GetFlow;
 use crate::ope_btree::internal::node::{
@@ -18,6 +7,14 @@ use crate::ope_btree::internal::node_store::BinaryNodeStore;
 use crate::ope_btree::internal::tree_path::PathElem;
 use crate::ope_btree::{BTreeErr, NodeId, Result, Trail, ValRefGen, ValueRef, ROOT_ID};
 use bytes::Bytes;
+use common::gen::{Generator, NumGen};
+use common::merkle::MerklePath;
+use common::{Digest, Hash};
+use kvstore_api::kvstore::KVStore;
+use protocol::btree::{ClientPutDetails, PutCallback, SearchResult};
+use std::marker::PhantomData;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 
 /// Encapsulates all logic for putting into tree
 #[derive(Debug, Clone)]
