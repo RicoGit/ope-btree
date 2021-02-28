@@ -17,8 +17,6 @@ use tokio::sync::RwLock;
 
 pub mod btree_verifier;
 pub mod errors;
-#[cfg(test)]
-mod integration_test;
 mod put_state;
 mod search_state;
 
@@ -231,5 +229,86 @@ impl State {
         Arc::new(RwLock::new(State {
             m_root: Hash::empty(),
         }))
+    }
+}
+
+#[cfg(feature = "test")]
+pub mod test {
+    use super::*;
+    use bytes::Bytes;
+    use common::noop_hasher::NoOpHasher;
+    use protocol::{BtreeCallback, ClientPutDetails, PutCallback, RpcFuture};
+    use std::sync::Mutex;
+
+    #[derive(Clone, Debug)]
+    pub struct NoOpKeyCrypt {}
+
+    impl Encryptor for NoOpKeyCrypt {
+        type PlainData = String;
+
+        fn encrypt(&self, data: Self::PlainData) -> crate::crypto::Result<Bytes> {
+            Ok(Bytes::from(data))
+        }
+    }
+
+    impl Decryptor for NoOpKeyCrypt {
+        type PlainData = String;
+
+        fn decrypt(&self, encrypted_data: &[u8]) -> crate::crypto::Result<Self::PlainData> {
+            Ok(String::from_utf8_lossy(encrypted_data).into())
+        }
+    }
+
+    /// Wraps PutState and used for testing, contains simple blocking Mutex for protect PutState.
+    /// Allows use non-cloneable PutState directly in Btree that requires clone.
+    #[derive(Clone, Debug)]
+    pub struct PutStateWrapper<'a> {
+        state: Arc<Mutex<PutState<'a, String, NoOpHasher, NoOpKeyCrypt>>>,
+    }
+
+    impl<'a> PutStateWrapper<'a> {
+        pub fn new(put_state: PutState<'a, String, NoOpHasher, NoOpKeyCrypt>) -> Self {
+            PutStateWrapper {
+                state: Arc::new(Mutex::new(put_state)),
+            }
+        }
+    }
+
+    impl<'a> BtreeCallback for PutStateWrapper<'a> {
+        fn next_child_idx<'f>(
+            &mut self,
+            keys: Vec<Bytes>,
+            children_hashes: Vec<Bytes>,
+        ) -> RpcFuture<'f, usize> {
+            self.state
+                .lock()
+                .unwrap()
+                .next_child_idx(keys, children_hashes)
+        }
+    }
+
+    impl<'a> PutCallback for PutStateWrapper<'a> {
+        fn put_details<'f>(
+            &mut self,
+            keys: Vec<Bytes>,
+            values_hashes: Vec<Bytes>,
+        ) -> RpcFuture<'f, ClientPutDetails> {
+            self.state.lock().unwrap().put_details(keys, values_hashes)
+        }
+
+        fn verify_changes<'f>(
+            &mut self,
+            server_merkle_root: Bytes,
+            was_splitting: bool,
+        ) -> RpcFuture<'f, Bytes> {
+            self.state
+                .lock()
+                .unwrap()
+                .verify_changes(server_merkle_root, was_splitting)
+        }
+
+        fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
+            self.state.lock().unwrap().changes_stored()
+        }
     }
 }

@@ -22,6 +22,8 @@ use tokio::sync::{Mutex, RwLock};
 
 pub mod command;
 pub mod flow;
+#[cfg(test)]
+mod integration_test;
 pub mod internal;
 
 type Result<V> = std::result::Result<V, BTreeErr>;

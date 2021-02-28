@@ -34,5 +34,9 @@ env_logger = "0.8"
 
 [dev-dependencies]
 
+client = { path = "../client", features = ["test"]}
+kvstore-binary = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
 kvstore-inmemory = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
-#kvstore-inmemory = { path="../../../async-kvstore/inmemory" }
+
+env_logger = "0.8"
+tokio = { version ="1.0", features = ["full"] }
