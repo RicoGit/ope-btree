@@ -51,7 +51,7 @@ impl<'a, Key, Digest, Dec> SearchState<'a, Key, Digest, Dec> {
 impl<'a, Key, Digest, Dec> BtreeCallback for SearchState<'a, Key, Digest, Dec>
 where
     Key: Ord + Debug + Clone + Send,
-    Digest: common::Digest + Clone,
+    Digest: common::Digest,
     Dec: Decryptor<PlainData = Key>,
 {
     /// Case when server asks next child
@@ -90,7 +90,7 @@ where
 impl<'a, Key, Digest, Dec> SearchCallback for SearchState<'a, Key, Digest, Dec>
 where
     Key: Ord + Debug + Clone + Send,
-    Digest: common::Digest + Clone,
+    Digest: common::Digest,
     Dec: Decryptor<PlainData = Key>,
 {
     /// Case when server returns founded leaf, this leaf either contains key,

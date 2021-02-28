@@ -71,7 +71,7 @@ impl<'a, Key, Digest, Crypt> PutState<'a, Key, Digest, Crypt> {
 impl<'a, Key, Digest, Crypt> BtreeCallback for PutState<'a, Key, Digest, Crypt>
 where
     Key: Ord + Debug + Clone + Send,
-    Digest: common::Digest + Clone,
+    Digest: common::Digest,
     Crypt: Decryptor<PlainData = Key> + Encryptor<PlainData = Key>,
 {
     /// Case when server asks next child
@@ -110,7 +110,7 @@ where
 impl<'a, Key, Digest, Crypt> PutCallback for PutState<'a, Key, Digest, Crypt>
 where
     Key: Ord + Debug + Clone + Send,
-    Digest: common::Digest + Clone,
+    Digest: common::Digest,
     Crypt: Decryptor<PlainData = Key> + Encryptor<PlainData = Key>,
 {
     /// Case when server returns founded leaf

@@ -129,7 +129,7 @@ pub struct Searcher<Digest, Decryptor> {
 impl<Key, Digest, Dec> Searcher<Digest, Dec>
 where
     Key: Ord + Debug,
-    Digest: common::Digest + Clone,
+    Digest: common::Digest,
     Dec: Decryptor<PlainData = Key>,
 {
     /// Verifies merkle proof for server response, after that search index of next child of branch.
