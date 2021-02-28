@@ -20,7 +20,7 @@ pub enum ClientBTreeError {
         source: CryptoError,
     },
     #[error("Verification Error: {msg:?}")]
-    VerificationErr { msg: String, m_root: Hash },
+    VerificationErr { msg: String },
     #[error("Illegal State Error: {msg:?}")]
     IllegalStateErr { msg: String },
 }
@@ -30,14 +30,13 @@ impl ClientBTreeError {
         key: Key,
         keys: Vec<common::Key>,
         children: Vec<Hash>,
-        m_root: Hash,
+        m_root: &Hash,
     ) -> ClientBTreeError {
         ClientBTreeError::VerificationErr {
             msg: format!(
                 "Verify NodeProof failed for key={:?}, Node({:?}, {:?}), merkle root={:?}",
                 key, keys, children, m_root
             ),
-            m_root,
         }
     }
 
@@ -45,13 +44,13 @@ impl ClientBTreeError {
         put_state: &PutState<Key, Digest, Crypt>,
         server_m_root: &Bytes,
     ) -> ClientBTreeError {
-        let client_m_root = put_state.get_client_root();
         ClientBTreeError::VerificationErr {
             msg: format!(
                 "Verify server's Put failed for server_m_root={:?}, client_m_root={:?}, state={:?}",
-                server_m_root, &client_m_root, put_state
+                server_m_root,
+                put_state.m_root(),
+                put_state
             ),
-            m_root: client_m_root,
         }
     }
 

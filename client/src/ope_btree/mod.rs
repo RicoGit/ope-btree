@@ -144,7 +144,7 @@ where
     pub fn search_in_branch(
         &self,
         key: Key,
-        m_root: Hash,
+        m_root: &Hash,
         mut m_path: MerklePath,
         keys: Vec<common::Key>,
         children_hashes: Vec<Hash>,
@@ -184,7 +184,7 @@ where
     pub fn search_in_leaf(
         &self,
         key: Key,
-        m_root: Hash,
+        m_root: &Hash,
         mut m_path: MerklePath, // todo make &mut anf remove from return value
         keys: Vec<common::Key>,
         children_hashes: Vec<Hash>,

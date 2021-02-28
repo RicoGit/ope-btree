@@ -29,7 +29,7 @@ pub struct SearchState<'a, Key, Digest, Decryptor> {
     state: RwLockReadGuard<'a, State>,
 }
 
-impl<'a, Key, Digest: Clone, Dec> SearchState<'a, Key, Digest, Dec> {
+impl<'a, Key, Digest, Dec> SearchState<'a, Key, Digest, Dec> {
     pub fn new(
         key: Key,
         state: RwLockReadGuard<'a, State>,
@@ -41,6 +41,10 @@ impl<'a, Key, Digest: Clone, Dec> SearchState<'a, Key, Digest, Dec> {
             searcher,
             state,
         }
+    }
+
+    pub fn m_root(&self) -> &Hash {
+        &self.state.m_root
     }
 }
 
@@ -68,7 +72,7 @@ where
             .search_in_branch(
                 // let (updated_m_path, idx) = self.searcher.search(
                 self.key.clone(),
-                self.state.m_root.clone(),
+                self.m_root(),
                 self.m_path.clone(),
                 keys.into_iter().map(common::Key::from).collect(),
                 children_hashes.into_iter().map(Hash::from).collect(),
@@ -107,7 +111,7 @@ where
             .searcher
             .search_in_leaf(
                 self.key.clone(),
-                self.state.m_root.clone(),
+                self.m_root(),
                 self.m_path.clone(),
                 keys.into_iter().map(common::Key::from).collect(),
                 values_hashes.into_iter().map(Hash::from).collect(),
@@ -127,7 +131,9 @@ impl<K: Debug, D, Dec> Debug for SearchState<'_, K, D, Dec> {
         write!(
             f,
             "SearchState(key:{:?}, m_root:{:?}, m_path:{:?})",
-            self.key, self.state.m_root, self.m_path
+            self.key,
+            self.m_root(),
+            self.m_path
         )
     }
 }

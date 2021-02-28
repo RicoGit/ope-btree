@@ -30,14 +30,10 @@ pub struct PutState<'a, Key, Digest, Crypt> {
     /// Encrypts keys
     encryptor: Crypt,
 
-    /// Write guard for current client state, while write guards are kept, read operations can't be start.
+    /// Write guard for current client state, while write guards are kept, other operations can't be start.
     /// Contains client's merkle root at the beginning of the request. Constant for round trip session.
-
-    /// Contains either copy of state or guarded state.
-    /// `Err(State)` means that this is the copy of original PutState
-    /// `OK(RwLockWriteGuard<'a, State>)` means that it's original state and
-    /// after it will be dropped OpeBTree client will be able to make next request.
-    state: Result<RwLockWriteGuard<'a, State>, State>, // todo remove and Cleanup redundant Clone
+    /// After it will be dropped OpeBTree client will be able to make next request.
+    state: RwLockWriteGuard<'a, State>,
 }
 
 impl<'a, Key, Digest, Crypt> PutState<'a, Key, Digest, Crypt> {
@@ -58,24 +54,17 @@ impl<'a, Key, Digest, Crypt> PutState<'a, Key, Digest, Crypt> {
             put_details: None, // will filled on put_details step
             searcher,
             encryptor,
-            state: Ok(state),
+            state,
         }
     }
 
-    pub fn get_client_root(&self) -> Hash {
-        match &self.state {
-            Err(state) => state.m_root.clone(),
-            Ok(guard) => guard.m_root.clone(),
-        }
+    pub fn m_root(&self) -> &Hash {
+        &self.state.m_root
     }
 
     /// Safes new merkle root on the client
     fn update_m_root(&mut self, new_m_root: Hash) {
-        if let Ok(guard) = &mut self.state {
-            guard.m_root = new_m_root;
-        } else {
-            panic!("Can't update m_root on a clone of PutState")
-        }
+        self.state.m_root = new_m_root;
     }
 }
 
@@ -102,7 +91,7 @@ where
             .searcher
             .search_in_branch(
                 self.key.clone(),
-                self.get_client_root(),
+                self.m_root(),
                 self.m_path.clone(),
                 keys.into_iter().map(common::Key::from).collect(),
                 children_hashes.into_iter().map(Hash::from).collect(),
@@ -141,7 +130,7 @@ where
             .searcher
             .search_in_leaf(
                 self.key.clone(),
-                self.get_client_root(),
+                self.m_root(),
                 self.m_path.clone(),
                 keys.into_iter().map(common::Key::from).collect(),
                 values_hashes.into_iter().map(Hash::from).collect(),
@@ -211,7 +200,7 @@ where
             }
         } else {
             // illegal state from prev step
-            let error = ClientBTreeError::illegal_state(&self.key, &self.get_client_root()).into();
+            let error = ClientBTreeError::illegal_state(&self.key, self.m_root()).into();
             async move { Err(error) }.boxed()
         }
     }
@@ -229,11 +218,7 @@ impl<K: Debug, Digest, Crypt> Debug for PutState<'_, K, Digest, Crypt> {
         write!(
             f,
             "PutState(key:{:?}, hash:{:?}, m_root:{:?}, m_path:{:?}, version:{:?})",
-            self.key,
-            self.value_checksum,
-            self.state.as_deref(),
-            self.m_path,
-            self.version
+            self.key, self.value_checksum, self.state, self.m_path, self.version
         )
     }
 }
