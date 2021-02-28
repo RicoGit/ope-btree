@@ -71,7 +71,7 @@ impl<Digest: common::Digest> BTreeVerifier<Digest> {
     /// `server_proof` A [[NodeProof]] of branch/leaf for verify from server
     /// `m_root` The merkle root of server tree (provides by client)
     /// `m_path` The merkle path passed from tree root at this moment (provides by client)
-    pub fn check_proof(&self, server_proof: NodeProof, m_root: Hash, m_path: MerklePath) -> bool {
+    pub fn check_proof(&self, server_proof: NodeProof, m_root: Hash, m_path: &MerklePath) -> bool {
         log::debug!(
             "check_proof server_proof={:?}, m_root={:?}, m_path={:?}",
             server_proof,
@@ -79,7 +79,7 @@ impl<Digest: common::Digest> BTreeVerifier<Digest> {
             m_path,
         );
         let server_hash = MerklePath::new(server_proof).calc_merkle_root::<Digest>(None);
-        let client_hash = self.expected_checksum(m_root, m_path);
+        let client_hash = self.expected_checksum(m_root, m_path.clone());
 
         let verifying_result = server_hash == client_hash;
         if !verifying_result {
@@ -159,7 +159,7 @@ mod tests {
         let _res = verifier.check_proof(
             NodeProof::new(h("[[k1][k2]]"), children_hashes.clone(), Some(1)),
             h("m_root"),
-            MerklePath::empty(),
+            &MerklePath::empty(),
         );
     }
 
@@ -173,7 +173,7 @@ mod tests {
         let res = verifier.check_proof(
             NodeProof::new(Hash::empty(), children_hashes.clone(), None),
             h("m_root"),
-            MerklePath::empty(),
+            &MerklePath::empty(),
         );
         assert!(!res);
 
@@ -181,13 +181,13 @@ mod tests {
         let res = verifier.check_proof(
             NodeProof::new(h("k1k2"), children_hashes.clone(), None),
             h("m_root"),
-            MerklePath::empty(),
+            &MerklePath::empty(),
         );
         assert!(!res);
 
         // if client merkle path is not empty, compare client and server (correct is Hash[512, [h2])
         let proof = NodeProof::new(h("k1k2"), children_hashes.clone(), None);
-        let res = verifier.check_proof(proof.clone(), h("m_root"), MerklePath::new(proof));
+        let res = verifier.check_proof(proof.clone(), h("m_root"), &MerklePath::new(proof));
         assert!(!res);
     }
 
@@ -202,7 +202,7 @@ mod tests {
         let res = verifier.check_proof(
             NodeProof::new(Hash::empty(), children_hashes.clone(), None),
             h("[h1][h2][h3]"),
-            MerklePath::empty(),
+            &MerklePath::empty(),
         );
         assert!(res);
 
@@ -210,7 +210,7 @@ mod tests {
         let res = verifier.check_proof(
             NodeProof::new(h("k1k2"), children_hashes.clone(), None),
             h("[k1k2][h1][h2][h3]"),
-            MerklePath::empty(),
+            &MerklePath::empty(),
         );
         assert!(res);
 
@@ -219,7 +219,7 @@ mod tests {
         let res = verifier.check_proof(
             NodeProof::new(Hash::empty(), vec![Hash::from_str("h2")], None),
             h("[[k1][k2]][h1][h2][h3]"),
-            MerklePath::new(proof),
+            &MerklePath::new(proof),
         );
         assert!(res);
     }

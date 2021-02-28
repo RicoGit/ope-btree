@@ -140,34 +140,36 @@ where
     /// `keys` Encrypted keys for deciding next tree child (from server)
     /// `children_hashes` Checksums of current branch children, for merkle proof checking (from server)
     ///
-    /// Returns a tuple with updated merkle path and searched next tree child index
+    /// Adds NodeProof to MerklePath and returns searched next tree child index
     pub fn search_in_branch(
         &self,
         key: Key,
-        m_root: &Hash,
-        mut m_path: MerklePath,
+        m_root: Hash,
+        m_path: &mut MerklePath,
         keys: Vec<common::Key>,
         children_hashes: Vec<Hash>,
-    ) -> Result<(MerklePath, usize)> {
+    ) -> Result<usize> {
         let mut node_proof =
             self.verifier
                 .get_branch_proof(keys.clone(), children_hashes.clone(), None);
-        let valid_proof =
-            self.verifier
-                .check_proof(node_proof.clone(), m_root.clone(), m_path.clone());
+        let valid_proof = self
+            .verifier
+            .check_proof(node_proof.clone(), m_root.clone(), m_path);
 
         if valid_proof {
             let search_result = self.cipher_search.binary_search(&keys, key)?;
             let insertion_point = search_result.idx();
             node_proof.set_idx(insertion_point);
+            log::trace!("add node_proof to m_path before {:?}", m_path);
             m_path.push(node_proof);
-            Ok((m_path, insertion_point))
+            log::trace!("add node_proof to m_path after: {:?}", m_path);
+            Ok(insertion_point)
         } else {
             Err(ClientBTreeError::wrong_proof(
                 key,
                 keys.clone(),
                 children_hashes,
-                m_root,
+                &m_root,
             ))
         }
     }
@@ -180,34 +182,36 @@ where
     /// `keys` Encrypted keys for deciding next tree child (from server)
     /// `children_hashes` Checksums of current leaf's values, for merkle proof checking (from server)
     ///
-    /// Returns a tuple with updated merkle path and SearchResult
+    /// Adds LeafProof to MerklePath and returns SearchResult
     pub fn search_in_leaf(
         &self,
         key: Key,
-        m_root: &Hash,
-        mut m_path: MerklePath, // todo make &mut anf remove from return value
+        m_root: Hash,
+        m_path: &mut MerklePath,
         keys: Vec<common::Key>,
         children_hashes: Vec<Hash>,
-    ) -> Result<(MerklePath, SearchResult)> {
+    ) -> Result<SearchResult> {
         let mut leaf_proof = self
             .verifier
             .get_leaf_proof(keys.clone(), children_hashes.clone());
 
-        let valid_proof =
-            self.verifier
-                .check_proof(leaf_proof.clone(), m_root.clone(), m_path.clone());
+        let valid_proof = self
+            .verifier
+            .check_proof(leaf_proof.clone(), m_root.clone(), m_path);
 
         if valid_proof {
             let search_result = self.cipher_search.binary_search(&keys, key)?;
             leaf_proof.set_idx(search_result.idx());
+            log::trace!("add leaf_proof to m_path before {:?}", m_path);
             m_path.push(leaf_proof);
-            Ok((m_path, search_result))
+            log::trace!("add leaf_proof to m_path after: {:?}", m_path);
+            Ok(search_result)
         } else {
             Err(ClientBTreeError::wrong_proof(
                 key,
                 keys.clone(),
                 children_hashes,
-                m_root,
+                &m_root,
             ))
         }
     }

@@ -91,16 +91,11 @@ where
             .searcher
             .search_in_branch(
                 self.key.clone(),
-                self.m_root(),
-                self.m_path.clone(),
+                self.m_root().clone(),
+                &mut self.m_path,
                 keys.into_iter().map(common::Key::from).collect(),
                 children_hashes.into_iter().map(Hash::from).collect(),
             )
-            .map(|(m_path, idx)| {
-                log::trace!("m_root before {:?}, after: {:?}", self.m_path, m_path);
-                self.m_path = m_path;
-                idx
-            })
             .map_err(Into::into);
 
         async move { result }.boxed()
@@ -130,20 +125,18 @@ where
             .searcher
             .search_in_leaf(
                 self.key.clone(),
-                self.m_root(),
-                self.m_path.clone(),
+                self.m_root().clone(),
+                &mut self.m_path,
                 keys.into_iter().map(common::Key::from).collect(),
                 values_hashes.into_iter().map(Hash::from).collect(),
             )
-            .and_then(|(mut m_path, search_res)| {
+            .and_then(|search_res| {
                 // update idx in last proof if exists
-                m_path
+                self.m_path
                     .0
                     .last_mut()
                     .map(|proof| proof.set_idx(search_res.idx()));
 
-                log::trace!("m_root before {:?}, after: {:?}", self.m_path, m_path);
-                self.m_path = m_path;
                 self.encryptor
                     .encrypt(self.key.clone())
                     .map(|encrypted_key| {

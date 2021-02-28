@@ -12,8 +12,6 @@ use protocol::{BtreeCallback, RpcFuture, SearchCallback, SearchResult};
 
 use tokio::sync::RwLockReadGuard;
 
-// todo make State enum, enum State { Search (...), Put {...} } ?
-
 /// State for each search ('Get', 'Range', 'Delete') request to remote BTree.
 /// One 'SearchState' corresponds to one series of round trip requests.
 /// The search plain text 'key'. Constant for round trip session
@@ -72,15 +70,11 @@ where
             .search_in_branch(
                 // let (updated_m_path, idx) = self.searcher.search(
                 self.key.clone(),
-                self.m_root(),
-                self.m_path.clone(),
+                self.m_root().clone(),
+                &mut self.m_path,
                 keys.into_iter().map(common::Key::from).collect(),
                 children_hashes.into_iter().map(Hash::from).collect(),
             )
-            .map(|(m_path, idx)| {
-                self.m_path = m_path;
-                idx
-            })
             .map_err(Into::into);
 
         async move { result }.boxed()
@@ -111,15 +105,11 @@ where
             .searcher
             .search_in_leaf(
                 self.key.clone(),
-                self.m_root(),
-                self.m_path.clone(),
+                self.m_root().clone(),
+                &mut self.m_path,
                 keys.into_iter().map(common::Key::from).collect(),
                 values_hashes.into_iter().map(Hash::from).collect(),
             )
-            .map(|(m_path, search_res)| {
-                self.m_path = m_path;
-                search_res
-            })
             .map_err(Into::into);
 
         async move { result }.boxed()
