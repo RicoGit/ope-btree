@@ -160,7 +160,7 @@ where
             let search_result = self.cipher_search.binary_search(&keys, key)?;
             let insertion_point = search_result.idx();
             node_proof.set_idx(insertion_point);
-            m_path.push_head(node_proof);
+            m_path.push(node_proof);
             Ok((m_path, insertion_point))
         } else {
             Err(ClientBTreeError::wrong_proof(
@@ -200,7 +200,7 @@ where
         if valid_proof {
             let search_result = self.cipher_search.binary_search(&keys, key)?;
             leaf_proof.set_idx(search_result.idx());
-            m_path.push_head(leaf_proof);
+            m_path.push(leaf_proof);
             Ok((m_path, search_result))
         } else {
             Err(ClientBTreeError::wrong_proof(

@@ -7,7 +7,7 @@ use tokio::sync::{Mutex, RwLock};
 use common::gen::{Generator, NumGen};
 use common::merkle::MerklePath;
 use common::{Digest, Hash};
-use protocol::{ClientPutDetails, PutCallbacks, SearchResult};
+use protocol::{ClientPutDetails, PutCallback, SearchResult};
 
 use crate::ope_btree::command::Cmd;
 use crate::ope_btree::flow::get_flow::GetFlow;
@@ -36,7 +36,7 @@ where
 /// Implementation PutFlow for PutCallbacks
 impl<Cb, Store, D> PutFlow<Cb, Store, D>
 where
-    Cb: PutCallbacks + Clone,
+    Cb: PutCallback + Clone,
     Store: KVStore<Vec<u8>, Vec<u8>>,
     D: Digest + 'static,
 {
@@ -76,8 +76,6 @@ where
         loop {
             match current_node {
                 Node::Leaf(leaf) => {
-                    // todo we have to create fake @transport for solving this problem
-                    // self.cmd = get_flow.get_cmd();
                     return self.put_for_leaf(current_node_id, leaf, trail).await;
                 }
                 Node::Branch(branch) => {
@@ -220,7 +218,7 @@ where
         (ctx.new_state_proof, ctx.put_task)
     }
 
-    /// Using for folding all visited branches from ''trail''.
+    /// Using for folding all visited branches of 'trail' in reverse order (root comes last)
     ///
     /// If branch isn't overflowed
     ///  * updates branch checksum into parent node and put branch and it's parent to ''nodesToSave'' into [[PutTask]].
@@ -269,7 +267,7 @@ where
             };
 
             ctx.new_state_proof
-                .push_head(affected_branch.to_proof::<D>(Some(affected_branch_idx)));
+                .push_parent(affected_branch.to_proof::<D>(Some(affected_branch_idx)));
 
             if is_root {
                 // there was no parent, root node was splitting
@@ -284,7 +282,7 @@ where
                 let affected_parent_idx = if is_insert_to_left { 0 } else { 1 };
 
                 ctx.new_state_proof
-                    .push_head(new_parent.to_proof::<D>(Some(affected_parent_idx)));
+                    .push_parent(new_parent.to_proof::<D>(Some(affected_parent_idx)));
 
                 let mut node_to_save = ctx.put_task.nodes_to_save;
                 node_to_save.extend(vec![
@@ -320,7 +318,7 @@ where
 
             let child_hash = branch.hash.clone();
             ctx.new_state_proof
-                .push_head(branch.to_proof::<D>(Some(next_child_idx)));
+                .push_parent(branch.to_proof::<D>(Some(next_child_idx)));
             ctx.put_task
                 .nodes_to_save
                 .push(NodeWithId::new(branch_id, Node::Branch(branch)));
@@ -386,7 +384,7 @@ where
                 );
                 let affected_parent_idx = if is_insert_to_left { 0 } else { 1 };
 
-                merkle_path.push_head(new_parent.to_proof::<D>(Some(affected_parent_idx)));
+                merkle_path.push_parent(new_parent.to_proof::<D>(Some(affected_parent_idx)));
 
                 PutCtx {
                     new_state_proof: merkle_path,

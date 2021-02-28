@@ -6,7 +6,7 @@ use common::merkle::MerklePath;
 use common::misc::ToBytes;
 use common::Hash;
 use futures::FutureExt;
-use protocol::{BtreeCallback, ClientPutDetails, PutCallbacks, RpcFuture};
+use protocol::{BtreeCallback, ClientPutDetails, PutCallback, RpcFuture};
 use std::fmt::{Debug, Formatter};
 
 use tokio::sync::RwLockWriteGuard;
@@ -37,7 +37,7 @@ pub struct PutState<'a, Key, Digest, Crypt> {
     /// `Err(State)` means that this is the copy of original PutState
     /// `OK(RwLockWriteGuard<'a, State>)` means that it's original state and
     /// after it will be dropped OpeBTree client will be able to make next request.
-    state: Result<RwLockWriteGuard<'a, State>, State>,
+    state: Result<RwLockWriteGuard<'a, State>, State>, // todo remove and Cleanup redundant Clone
 }
 
 impl<'a, Key, Digest, Crypt> PutState<'a, Key, Digest, Crypt> {
@@ -108,6 +108,7 @@ where
                 children_hashes.into_iter().map(Hash::from).collect(),
             )
             .map(|(m_path, idx)| {
+                log::trace!("m_root before {:?}, after: {:?}", self.m_path, m_path);
                 self.m_path = m_path;
                 idx
             })
@@ -117,7 +118,7 @@ where
     }
 }
 
-impl<'a, Key, Digest, Crypt> PutCallbacks for PutState<'a, Key, Digest, Crypt>
+impl<'a, Key, Digest, Crypt> PutCallback for PutState<'a, Key, Digest, Crypt>
 where
     Key: Ord + Debug + Clone + Send,
     Digest: common::Digest + Clone,
@@ -151,7 +152,8 @@ where
                     .0
                     .last_mut()
                     .map(|proof| proof.set_idx(search_res.idx()));
-                // update m_path
+
+                log::trace!("m_root before {:?}, after: {:?}", self.m_path, m_path);
                 self.m_path = m_path;
                 self.encryptor
                     .encrypt(self.key.clone())
@@ -233,26 +235,5 @@ impl<K: Debug, Digest, Crypt> Debug for PutState<'_, K, Digest, Crypt> {
             self.m_path,
             self.version
         )
-    }
-}
-
-/// Custom implementation of Clone that allows clone PutState without cloning guard of state.
-impl<'a, Key: Clone, Digest: Clone, Crypt: Clone> Clone for PutState<'a, Key, Digest, Crypt> {
-    fn clone(&self) -> Self {
-        let state: State = match &self.state {
-            Ok(guard) => (*guard).clone(),
-            Err(state) => state.clone(),
-        };
-        Self {
-            key: self.key.clone(),
-            value_checksum: self.value_checksum.clone(),
-            m_path: self.m_path.clone(),
-            version: self.version,
-            put_details: self.put_details.clone(),
-            searcher: self.searcher.clone(),
-            encryptor: self.encryptor.clone(),
-            // we returns copy of State, because RwLockWriteGuard can't be cloned
-            state: Err(state),
-        }
     }
 }

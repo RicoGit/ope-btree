@@ -6,9 +6,11 @@ use common::gen::NumGen;
 use common::noop_hasher::NoOpHasher;
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use log::LevelFilter;
+use protocol::{BtreeCallback, ClientPutDetails, PutCallback, RpcFuture};
 use server::ope_btree::command::Cmd;
 use server::ope_btree::internal::node_store::BinaryNodeStore;
 use server::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen, ValueRef};
+use std::sync::Mutex;
 
 #[derive(Clone, Debug)]
 struct NoOpKeyCrypt {}
@@ -56,7 +58,7 @@ async fn put_one_test() {
     assert_eq!(tree.get(cmd).await.unwrap(), None);
 
     let put_state = client.init_put(k("k1"), h("v1"), 0).await;
-    let cmd = Cmd::new(put_state);
+    let cmd = Cmd::new(PutStateWrapper::new(put_state));
     assert_eq!(tree.put(cmd).await.unwrap(), (vr(101), Bytes::new()))
 }
 
@@ -73,7 +75,7 @@ async fn put_one_and_get_it_back_test() {
     assert_eq!(tree.get(cmd).await.unwrap(), None);
 
     let put_state = client.init_put(k("k1"), h("v1"), 0).await;
-    let cmd = Cmd::new(put_state);
+    let cmd = Cmd::new(PutStateWrapper::new(put_state));
     assert_eq!(tree.put(cmd).await.unwrap(), (vr(101), Bytes::new()));
 
     dbg!(&client.state.read().await.m_root);
@@ -85,32 +87,32 @@ async fn put_one_and_get_it_back_test() {
 
 #[tokio::test]
 async fn fill_root_node_test() {
+    // put 4 and get them back (tree depth 1)
+
     init_logger();
     let mut tree = create_server().await;
     let client = create_client();
 
     // fill root node with 4 keys
-    put(5, &mut tree, &client).await;
+    put(4, &mut tree, &client).await;
 
     // get all keys back
-    get(5, &mut tree, &client).await;
+    get(4, &mut tree, &client).await;
 }
 
 #[tokio::test]
-#[ignore]
-// todo we have to create fake @transport for solving this problem (we clone put_state and update m_path on the clone)
 async fn rebalancing_root_node_test() {
-    // put 10 and get it back
+    // put 10 and get them back (tree depth 2)
     init_logger();
 
     let mut tree = create_server().await;
     let client = create_client();
 
     // fill root node with 4 keys
-    put(7, &mut tree, &client).await;
+    put(10, &mut tree, &client).await;
 
     // get all keys back
-    get(7, &mut tree, &client).await;
+    get(10, &mut tree, &client).await;
 }
 
 async fn put(
@@ -118,9 +120,9 @@ async fn put(
     tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
     client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
 ) {
-    for idx in 1..n {
+    for idx in 1..n + 1 {
         let put_state = client.init_put(key(idx), hash(idx), idx).await;
-        let cmd = Cmd::new(put_state);
+        let cmd = Cmd::new(PutStateWrapper::new(put_state));
         assert_eq!(tree.put(cmd).await.unwrap(), (vr(100 + idx), Bytes::new()));
     }
 }
@@ -181,6 +183,59 @@ fn vr(idx: usize) -> ValueRef {
 fn init_logger() {
     let _ = env_logger::builder()
         .is_test(true)
-        .filter_level(LevelFilter::Debug)
+        .filter_level(LevelFilter::Info)
         .try_init();
+}
+
+/// Wraps PutState and used for testing, contains simple blocking Mutex for protect PutState.
+/// Allows use non-clonable PutState directly in Btree that requires clone.
+#[derive(Clone, Debug)]
+struct PutStateWrapper<'a> {
+    state: Arc<Mutex<PutState<'a, String, NoOpHasher, NoOpKeyCrypt>>>,
+}
+
+impl<'a> PutStateWrapper<'a> {
+    fn new(put_state: PutState<'a, String, NoOpHasher, NoOpKeyCrypt>) -> Self {
+        PutStateWrapper {
+            state: Arc::new(Mutex::new(put_state)),
+        }
+    }
+}
+
+impl<'a> BtreeCallback for PutStateWrapper<'a> {
+    fn next_child_idx<'f>(
+        &mut self,
+        keys: Vec<Bytes>,
+        children_hashes: Vec<Bytes>,
+    ) -> RpcFuture<'f, usize> {
+        self.state
+            .lock()
+            .unwrap()
+            .next_child_idx(keys, children_hashes)
+    }
+}
+
+impl<'a> PutCallback for PutStateWrapper<'a> {
+    fn put_details<'f>(
+        &mut self,
+        keys: Vec<Bytes>,
+        values_hashes: Vec<Bytes>,
+    ) -> RpcFuture<'f, ClientPutDetails> {
+        self.state.lock().unwrap().put_details(keys, values_hashes)
+    }
+
+    fn verify_changes<'f>(
+        &mut self,
+        server_merkle_root: Bytes,
+        was_splitting: bool,
+    ) -> RpcFuture<'f, Bytes> {
+        self.state
+            .lock()
+            .unwrap()
+            .verify_changes(server_merkle_root, was_splitting)
+    }
+
+    fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
+        self.state.lock().unwrap().changes_stored()
+    }
 }

@@ -4,10 +4,10 @@ use bytes::Bytes;
 use common::merkle::MerklePath;
 use common::misc::ToBytes;
 use common::Digest;
-use protocol::{ClientPutDetails, PutCallbacks};
+use protocol::{ClientPutDetails, PutCallback};
 
 /// Command for inserting key and value to the OpeBTree.
-impl<Cb: PutCallbacks> Cmd<Cb> {
+impl<Cb: PutCallback> Cmd<Cb> {
     /// Returns all details needed for inserting a key-value to the OpeBTree.
     ///
     /// # Arguments

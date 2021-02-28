@@ -7,7 +7,7 @@ use bytes::Bytes;
 use common::Digest;
 use kvstore_api::kvstore::KVStore;
 use kvstore_api::kvstore::*;
-use protocol::{BtreeCallback, PutCallbacks, SearchCallback};
+use protocol::{BtreeCallback, PutCallback, SearchCallback};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -92,7 +92,7 @@ where
         encrypted_value: Bytes,
     ) -> Result<Option<Bytes>>
     where
-        Scb: PutCallbacks + BtreeCallback + Clone + 'a,
+        Scb: PutCallback + BtreeCallback + Clone + 'a,
     {
         // todo start transaction
 

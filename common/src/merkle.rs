@@ -173,9 +173,14 @@ impl MerklePath {
         MerklePath(vec![])
     }
 
-    /// Adds new `proof` to the end of the merkle path.
-    pub fn push_head(&mut self, proof: NodeProof) {
+    /// Adds new `proof` to the head of the merkle path (adds new parent proof).
+    pub fn push_parent(&mut self, proof: NodeProof) {
         self.0.insert(0, proof);
+    }
+
+    /// Adds new `proof` to the end of the merkle path.
+    pub fn push(&mut self, proof: NodeProof) {
+        self.0.push(proof);
     }
 
     /// Returns child's hash for substitution index from last proof
@@ -311,22 +316,34 @@ mod tests {
     }
 
     #[test]
-    fn merkle_path_push_head_test() {
+    fn merkle_path_push_parent_test() {
         // Adds new NodeProof to MerklePath
         let proof1 = node_proof("proof1", None);
         let proof2 = node_proof("proof2", None);
         let mut m_path = MerklePath::empty();
-        m_path.push_head(proof1.clone());
+        m_path.push_parent(proof1.clone());
         assert_eq!(MerklePath(vec![proof1.clone()]), m_path);
-        m_path.push_head(proof2.clone());
+        m_path.push_parent(proof2.clone());
         assert_eq!(MerklePath(vec![proof2.clone(), proof1.clone()]), m_path);
+    }
+
+    #[test]
+    fn merkle_path_push_test() {
+        // Adds new NodeProof to MerklePath
+        let proof1 = node_proof("proof1", None);
+        let proof2 = node_proof("proof2", None);
+        let mut m_path = MerklePath::empty();
+        m_path.push(proof1.clone());
+        assert_eq!(MerklePath(vec![proof1.clone()]), m_path);
+        m_path.push(proof2.clone());
+        assert_eq!(MerklePath(vec![proof1.clone(), proof2.clone()]), m_path);
     }
 
     #[test]
     fn merkle_path_to_root_noop_hasher_test() {
         // Calculate merkle root hash of merkle path with substitution (noop hasher)
         let m_path = merkle_path(
-            vec!["Proof3", "Proof2", "Proof1"],
+            vec!["Proof1", "Proof2", "Proof3"],
             vec![Some(1), Some(1), Some(1)],
         );
         let result = m_path.calc_merkle_root::<NoOpHasher>(Some(Hash::from_str("#new#")));
@@ -341,8 +358,8 @@ mod tests {
     fn merkle_path_to_root_without_substitution_noop_hasher_test() {
         // Calculate merkle root hash of merkle path without substitution
         let m_path = merkle_path(
-            vec!["Proof3", "Proof2", "Proof1"],
-            vec![None, Some(1), Some(1)],
+            vec!["Proof1", "Proof2", "Proof3"],
+            vec![Some(1), Some(1), None],
         );
         let result = m_path.calc_merkle_root::<NoOpHasher>(None);
         assert_eq!(
@@ -367,7 +384,7 @@ mod tests {
     fn merkle_path(proofs: Vec<&str>, indexes: Vec<Option<usize>>) -> MerklePath {
         let mut m_path = MerklePath::empty();
         for (proof, idx) in proofs.into_iter().zip(indexes) {
-            m_path.push_head(node_proof(proof, idx));
+            m_path.push(node_proof(proof, idx));
         }
         m_path
     }

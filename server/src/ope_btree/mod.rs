@@ -12,7 +12,7 @@ use common::Hash;
 use flow::get_flow::GetFlow;
 use flow::put_flow::{PutFlow, PutTask};
 use kvstore_api::kvstore::KVStore;
-use protocol::{BtreeCallback, ProtocolError, PutCallbacks, SearchCallback};
+use protocol::{BtreeCallback, ProtocolError, PutCallback, SearchCallback};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -227,7 +227,7 @@ where
     /// case will be created new reference to value
     pub async fn put<Cb>(&mut self, mut cmd: Cmd<Cb>) -> Result<(ValueRef, Bytes)>
     where
-        Cb: PutCallbacks + BtreeCallback + Clone,
+        Cb: PutCallback + BtreeCallback + Clone,
     {
         log::debug!("Put starts");
 
@@ -319,7 +319,8 @@ where
         // todo start transaction
 
         if task.increase_depth {
-            self.depth.fetch_add(1, Ordering::Relaxed);
+            let depth = self.depth.fetch_add(1, Ordering::Relaxed);
+            log::info!("Tree grows, depth: {:?}", depth);
         }
         let mut store = self.node_store.write().await;
 

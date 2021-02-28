@@ -105,7 +105,7 @@ impl ClientPutDetails {
 /// Wrapper for all callbacks needed for BTree's ''Put'' operation.
 /// Each callback corresponds to operation needed btree for traversing
 /// and inserting value.
-pub trait PutCallbacks: BtreeCallback {
+pub trait PutCallback: BtreeCallback {
     /// Server sends founded leaf details.
     ///
     /// # Arguments

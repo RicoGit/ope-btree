@@ -30,7 +30,7 @@ pub mod tests {
     use bytes::Bytes;
     use futures::FutureExt;
     use protocol::{
-        BtreeCallback, ClientPutDetails, PutCallbacks, RpcFuture, SearchCallback, SearchResult,
+        BtreeCallback, ClientPutDetails, PutCallback, RpcFuture, SearchCallback, SearchResult,
     };
     use std::cell::RefCell;
 
@@ -100,7 +100,7 @@ pub mod tests {
         }
     }
 
-    impl PutCallbacks for TestCallback {
+    impl PutCallback for TestCallback {
         fn put_details<'f>(
             &mut self,
             _keys: Vec<Bytes>,
