@@ -86,7 +86,7 @@ async fn put_one_and_get_it_back_test() {
 }
 
 #[tokio::test]
-async fn fill_root_node_test() {
+async fn one_depth_tree_test() {
     // put 4 and get them back (tree depth 1)
 
     init_logger();
@@ -101,7 +101,7 @@ async fn fill_root_node_test() {
 }
 
 #[tokio::test]
-async fn rebalancing_root_node_test() {
+async fn two_depth_tree_test() {
     // put 10 and get them back (tree depth 2)
     init_logger();
 
@@ -113,6 +113,51 @@ async fn rebalancing_root_node_test() {
 
     // get all keys back
     get(10, &mut tree, &client).await;
+}
+
+#[tokio::test]
+async fn three_depth_tree_test() {
+    // put 20 and get them back (tree depth 3)
+    init_logger();
+
+    let mut tree = create_server().await;
+    let client = create_client();
+
+    // fill root node with 4 keys
+    put(20, &mut tree, &client).await;
+
+    // get all keys back
+    get(20, &mut tree, &client).await;
+}
+
+#[tokio::test]
+async fn five_depth_tree_test() {
+    // put 200 and get them back (tree depth 5)
+    init_logger();
+
+    let mut tree = create_server().await;
+    let client = create_client();
+
+    // fill root node with 4 keys
+    put(200, &mut tree, &client).await;
+
+    // get all keys back
+    get(200, &mut tree, &client).await;
+}
+
+#[tokio::test]
+async fn five_depth_tree_reverse_test() {
+    // put 200 in reverse order and get them back (tree depth 5)
+    init_logger();
+
+    let mut tree = create_server().await;
+    let client = create_client();
+
+    // fill root node with 4 keys
+    reverse_put(200, &mut tree, &client).await;
+
+    // get all keys back
+    reverse_get(200, &mut tree, &client).await;
 }
 
 async fn put(
@@ -127,6 +172,21 @@ async fn put(
     }
 }
 
+async fn reverse_put(
+    n: usize,
+    tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
+    client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
+) {
+    for idx in (1..n + 1).rev() {
+        let put_state = client.init_put(key(idx), hash(idx), idx).await;
+        let cmd = Cmd::new(PutStateWrapper::new(put_state));
+        assert_eq!(
+            tree.put(cmd).await.unwrap(),
+            (vr(100 + (n - idx + 1)), Bytes::new())
+        );
+    }
+}
+
 async fn get(
     n: usize,
     tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
@@ -136,6 +196,18 @@ async fn get(
         let get_state = client.init_get(key(idx)).await;
         let cmd = Cmd::new(get_state);
         assert_eq!(tree.get(cmd).await.unwrap(), Some(vr(100 + idx)));
+    }
+}
+
+async fn reverse_get(
+    n: usize,
+    tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
+    client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
+) {
+    for idx in (1..n + 1).rev() {
+        let get_state = client.init_get(key(idx)).await;
+        let cmd = Cmd::new(get_state);
+        assert_eq!(tree.get(cmd).await.unwrap(), Some(vr(100 + (n - idx + 1))));
     }
 }
 
