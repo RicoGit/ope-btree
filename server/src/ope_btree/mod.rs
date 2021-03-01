@@ -383,9 +383,9 @@ mod tests {
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
     use protocol::btree::{ClientPutDetails, SearchResult};
 
-    fn create_node_store(
-        idx: NodeId,
-    ) -> BinaryNodeStore<NodeId, Node, HashMapKVStore<Vec<u8>, Vec<u8>>, NumGen> {
+    type BinStore = HashMapKVStore<Vec<u8>, Vec<u8>>;
+
+    fn create_node_store(idx: NodeId) -> BinaryNodeStore<NodeId, Node, BinStore, NumGen> {
         let store = HashMapKVStore::new();
         BinaryNodeStore::new(store, NumGen(idx))
     }
@@ -403,7 +403,7 @@ mod tests {
         )
     }
 
-    async fn empty_tree() -> OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher> {
+    async fn empty_tree() -> OpeBTree<BinStore, NoOpHasher> {
         let node_store = create_node_store(0);
         let mut tree = create_tree(node_store);
         tree.init().await.unwrap();
@@ -496,9 +496,7 @@ mod tests {
         assert_eq!(res1, Some(ValueRef::from_str("\0\0\0\0\0\0\0\x12"))); // val_ref is the same as we got from put
     }
 
-    async fn create_3_depth_tree(
-        tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
-    ) {
+    async fn create_3_depth_tree(tree: &mut OpeBTree<BinStore, NoOpHasher>) {
         let number = 19;
         // ok - number = 18 2 depth tree:
         // [[K4][K7][K10][K13][K1V1K2V2K3V3K4V4][K5V5K6V6K7V7][K8V8K9V9K10V10][K11V11K12V12K13V13][K14V14K15V15K16V16]]]

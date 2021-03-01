@@ -242,9 +242,9 @@ pub mod test {
     use std::sync::Mutex;
 
     #[derive(Clone, Debug)]
-    pub struct NoOpKeyCrypt {}
+    pub struct NoOpCrypt {}
 
-    impl Encryptor for NoOpKeyCrypt {
+    impl Encryptor for NoOpCrypt {
         type PlainData = String;
 
         fn encrypt(&self, data: Self::PlainData) -> crate::crypto::Result<Bytes> {
@@ -252,7 +252,7 @@ pub mod test {
         }
     }
 
-    impl Decryptor for NoOpKeyCrypt {
+    impl Decryptor for NoOpCrypt {
         type PlainData = String;
 
         fn decrypt(&self, encrypted_data: &[u8]) -> crate::crypto::Result<Self::PlainData> {
@@ -264,11 +264,11 @@ pub mod test {
     /// Allows use non-cloneable PutState directly in Btree that requires clone.
     #[derive(Clone, Debug)]
     pub struct PutStateWrapper<'a> {
-        state: Arc<Mutex<PutState<'a, String, NoOpHasher, NoOpKeyCrypt>>>,
+        state: Arc<Mutex<PutState<'a, String, NoOpHasher, NoOpCrypt>>>,
     }
 
     impl<'a> PutStateWrapper<'a> {
-        pub fn new(put_state: PutState<'a, String, NoOpHasher, NoOpKeyCrypt>) -> Self {
+        pub fn new(put_state: PutState<'a, String, NoOpHasher, NoOpCrypt>) -> Self {
             PutStateWrapper {
                 state: Arc::new(Mutex::new(put_state)),
             }

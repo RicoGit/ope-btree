@@ -70,6 +70,8 @@ mod tests {
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
     use std::sync::Arc;
 
+    type BinStore = HashMapKVStore<Vec<u8>, Vec<u8>>;
+
     #[test]
     fn sync_dyn_test() {
         let _store: Arc<dyn Send + Sync> = Arc::new(create(0));
@@ -130,9 +132,7 @@ mod tests {
 
     // todo add negative cases
 
-    fn create(
-        idx: usize,
-    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>, NumGen> {
+    fn create(idx: usize) -> BinaryNodeStore<usize, Node, BinStore, NumGen> {
         let store = HashMapKVStore::new();
         BinaryNodeStore::new(store, NumGen(idx))
     }

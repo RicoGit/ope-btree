@@ -15,6 +15,9 @@ use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 
+#[cfg(test)]
+mod integration_test;
+
 #[derive(Error, Debug)]
 pub enum DbError {
     #[error("BTree Error")]
@@ -159,6 +162,8 @@ mod tests {
     use kvstore_inmemory::hashmap_store::HashMapKVStore;
     use tokio::sync::mpsc::channel;
 
+    type BinStore = HashMapKVStore<Vec<u8>, Vec<u8>>;
+
     #[tokio::test]
     async fn new_test() {
         let (tx, _rx) = channel::<DatasetChanged>(1);
@@ -177,9 +182,7 @@ mod tests {
 
     // todo write more test cases
 
-    fn create_node_store(
-        idx: usize,
-    ) -> BinaryNodeStore<usize, Node, HashMapKVStore<Vec<u8>, Vec<u8>>, NumGen> {
+    fn create_node_store(idx: usize) -> BinaryNodeStore<usize, Node, BinStore, NumGen> {
         BinaryNodeStore::new(HashMapKVStore::new(), NumGen(idx))
     }
 
@@ -198,8 +201,7 @@ mod tests {
 
     async fn create_db(
         tx: Sender<DatasetChanged>,
-    ) -> OpeDatabase<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>, NoOpHasher>
-    {
+    ) -> OpeDatabase<BinStore, HashMapKVStore<Bytes, Bytes>, NoOpHasher> {
         let index = create_tree(create_node_store(0));
         let mut db = OpeDatabase::new(index, HashMapKVStore::new(), tx);
         assert!(db.init().await.is_ok());

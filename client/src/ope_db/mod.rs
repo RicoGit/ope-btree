@@ -29,8 +29,20 @@ where
     Digest: common::Digest + Clone,
     Rpc: OpeDatabaseRpc,
 {
-    pub fn new() -> Self {
-        todo!()
+    pub fn new(
+        index: OpeBTreeClient<KeyCrypt, Digest>,
+        val_crypt: ValCrypt,
+        storage: Rpc,
+        version: AtomicUsize,
+        dataset_id: Bytes,
+    ) -> Self {
+        OpeDatabaseClient {
+            index,
+            val_crypt,
+            storage,
+            version,
+            dataset_id,
+        }
     }
 
     /// Gets stored value for specified key.

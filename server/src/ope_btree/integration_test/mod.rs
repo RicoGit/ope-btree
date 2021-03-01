@@ -1,4 +1,5 @@
-//! Integration test for OpeBTreeClient and OpeBTree server.
+//! Integration test for OpeBTree and OpeBTreeClient.
+//! We test only index here!
 
 use super::*;
 use crate::ope_btree::command::Cmd;
@@ -12,6 +13,8 @@ use common::gen::NumGen;
 use common::noop_hasher::NoOpHasher;
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use log::LevelFilter;
+
+type BinStore = HashMapKVStore<Vec<u8>, Vec<u8>>;
 
 #[tokio::test]
 async fn get_from_empty_tree_test() {
@@ -142,8 +145,8 @@ async fn five_depth_tree_reverse_test() {
 
 async fn put(
     n: usize,
-    tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
-    client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
+    tree: &mut OpeBTree<BinStore, NoOpHasher>,
+    client: &OpeBTreeClient<NoOpCrypt, NoOpHasher>,
 ) {
     for idx in 1..n + 1 {
         let put_state = client.init_put(key(idx), hash(idx), idx).await;
@@ -154,8 +157,8 @@ async fn put(
 
 async fn reverse_put(
     n: usize,
-    tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
-    client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
+    tree: &mut OpeBTree<BinStore, NoOpHasher>,
+    client: &OpeBTreeClient<NoOpCrypt, NoOpHasher>,
 ) {
     for idx in (1..n + 1).rev() {
         let put_state = client.init_put(key(idx), hash(idx), idx).await;
@@ -169,8 +172,8 @@ async fn reverse_put(
 
 async fn get(
     n: usize,
-    tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
-    client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
+    tree: &mut OpeBTree<BinStore, NoOpHasher>,
+    client: &OpeBTreeClient<NoOpCrypt, NoOpHasher>,
 ) {
     for idx in 1..n {
         let get_state = client.init_get(key(idx)).await;
@@ -181,8 +184,8 @@ async fn get(
 
 async fn reverse_get(
     n: usize,
-    tree: &mut OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher>,
-    client: &OpeBTreeClient<NoOpKeyCrypt, NoOpHasher>,
+    tree: &mut OpeBTree<BinStore, NoOpHasher>,
+    client: &OpeBTreeClient<NoOpCrypt, NoOpHasher>,
 ) {
     for idx in (1..n + 1).rev() {
         let get_state = client.init_get(key(idx)).await;
@@ -191,14 +194,14 @@ async fn reverse_get(
     }
 }
 
-fn create_client() -> OpeBTreeClient<NoOpKeyCrypt, NoOpHasher> {
-    let crypt = NoOpKeyCrypt {};
-    let client: OpeBTreeClient<NoOpKeyCrypt, NoOpHasher> =
-        OpeBTreeClient::<NoOpKeyCrypt, NoOpHasher>::new(Hash::empty(), crypt, ());
+fn create_client() -> OpeBTreeClient<NoOpCrypt, NoOpHasher> {
+    let crypt = NoOpCrypt {};
+    let client: OpeBTreeClient<NoOpCrypt, NoOpHasher> =
+        OpeBTreeClient::<NoOpCrypt, NoOpHasher>::new(Hash::empty(), crypt, ());
     client
 }
 
-async fn create_server() -> OpeBTree<HashMapKVStore<Vec<u8>, Vec<u8>>, NoOpHasher> {
+async fn create_server() -> OpeBTree<BinStore, NoOpHasher> {
     let conf = OpeBTreeConf {
         arity: 4,
         alpha: 0.25,
