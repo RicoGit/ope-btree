@@ -5,7 +5,7 @@ use super::*;
 use crate::btree::{PutCallback, SearchCallback};
 use bytes::Bytes;
 
-trait OpeDatabaseRpc {
+pub trait OpeDatabaseRpc {
     /// Initiates 'Get' operation in remote OpeBTree.
     ///
     /// `dataset_id` Dataset Id. Dataset is one key-value collection.
@@ -14,6 +14,7 @@ trait OpeDatabaseRpc {
     ///
     /// Returns found value, None if nothing was found.
     fn get<'f, Cb: SearchCallback>(
+        &self,
         dataset_id: Bytes,
         version: usize,
         search_callback: Cb,
@@ -28,6 +29,7 @@ trait OpeDatabaseRpc {
     ///
     /// Returns old value if old value was overridden, None otherwise.
     fn put<'f, Cb: PutCallback>(
+        &self,
         dataset_id: Bytes,
         version: usize,
         put_callback: Cb,
