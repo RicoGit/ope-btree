@@ -107,7 +107,7 @@ impl LeafNode {
         idx: usize,
     ) -> LeafNode {
         assert!(
-            idx != 0 || idx >= self.size,
+            idx == 0 || idx < self.size,
             format!(
                 "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
                 idx, self.size

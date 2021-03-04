@@ -13,6 +13,7 @@ use common::noop_hasher::NoOpHasher;
 use common::Hash;
 use futures::{FutureExt, TryFutureExt};
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
+use log::LevelFilter;
 use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback, SearchCallback, SearchResult};
 use protocol::database::OpeDatabaseRpc;
 use protocol::{ProtocolError, RpcFuture};
@@ -29,20 +30,59 @@ async fn get_from_empty_db_test() {
     let db = create_server(tx).await;
     let client = create_client(db);
 
-    let result = client.get("k1".to_string()).await;
+    let result = client.get(k(1)).await;
     assert_eq!(result.unwrap(), None)
 }
 
 #[tokio::test]
 async fn put_to_empty_db_test() {
-    // get from empty db
+    // put to empty db
 
     let (tx, _rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
     let client = create_client(db);
 
-    let result = client.put("k1".to_string(), "v1".to_string()).await;
-    assert_eq!(result.unwrap(), None)
+    let result = client.put(k(1), v(1)).await;
+    assert_eq!(result.unwrap(), None);
+}
+
+#[tokio::test]
+async fn put_one_and_get_it_back_test() {
+    // put one and get it back
+    init_logger();
+
+    let (tx, mut rx) = channel::<DatasetChanged>(1);
+    let db = create_server(tx).await;
+    let client = create_client(db);
+
+    let result = client.put(k(1), v(1)).await;
+    assert_eq!(result.unwrap(), None);
+
+    let result = client.get(k(1)).await;
+    assert_eq!(result.unwrap(), Some(v(1)));
+
+    assert_eq!(
+        rx.recv().await.unwrap(),
+        DatasetChanged::new(h("[[k1][v1]]"), 1, Bytes::new())
+    )
+}
+
+#[tokio::test]
+async fn update_single_item_test() {
+    // put one and get it back, update it and get back again
+    init_logger();
+
+    let (tx, mut rx) = channel::<DatasetChanged>(1);
+    let db = create_server(tx).await;
+    let client = create_client(db);
+
+    assert_eq!(client.put(k(1), v(1)).await.unwrap(), None);
+    assert_eq!(client.get(k(1)).await.unwrap(), Some(v(1)));
+    assert_eq!(rx.recv().await.unwrap(), dc("[[k1][v1]]", 1));
+
+    assert_eq!(client.put(k(1), v(42)).await.unwrap(), Some(v(1)));
+    assert_eq!(client.get(k(1)).await.unwrap(), Some(v(42)));
+    assert_eq!(rx.recv().await.unwrap(), dc("[[k1][v42]]", 2));
 }
 
 struct TestDatabaseRpc {
@@ -102,29 +142,41 @@ impl OpeDatabaseRpc for TestDatabaseRpc {
 
 struct TestCb<Cb> {
     cb: *mut Cb,
+    copy: bool,
 }
 
 unsafe impl<Cb> Send for TestCb<Cb> {}
 
 unsafe impl<Cb> Sync for TestCb<Cb> {}
 
+impl<Cb> Drop for TestCb<Cb> {
+    fn drop(&mut self) {
+        if !self.copy {
+            unsafe { Box::from_raw(self.cb) };
+        }
+    }
+}
+
 impl<Cb> Clone for TestCb<Cb> {
     fn clone(&self) -> Self {
-        TestCb { cb: self.cb }
+        TestCb {
+            cb: self.cb,
+            copy: true,
+        }
     }
 }
 
 impl<Cb: SearchCallback> TestCb<Cb> {
     fn search(cb: Box<Cb>) -> Self {
         let cb: *mut Cb = Box::into_raw(cb);
-        TestCb { cb }
+        TestCb { cb, copy: false }
     }
 }
 
 impl<Cb: PutCallback> TestCb<Cb> {
     fn put(cb: Box<Cb>) -> Self {
         let cb: *mut Cb = Box::into_raw(cb);
-        TestCb { cb }
+        TestCb { cb, copy: false }
     }
 }
 
@@ -207,4 +259,26 @@ fn create_client(
     let dataset_id = "test_dataset".into();
 
     OpeDatabaseClient::new(index, crypt, rpc, AtomicUsize::new(0), dataset_id)
+}
+
+fn init_logger() {
+    let _ = env_logger::builder()
+        .is_test(true)
+        .filter_level(LevelFilter::Info)
+        .try_init();
+}
+
+fn k(idx: usize) -> String {
+    format!("k{}", idx)
+}
+
+fn v(idx: usize) -> String {
+    format!("v{}", idx)
+}
+
+fn h(str: &str) -> Hash {
+    Hash::build::<NoOpHasher, _>(str.as_bytes())
+}
+fn dc(hash: &str, version: usize) -> DatasetChanged {
+    DatasetChanged::new(h(hash), version, Bytes::new())
 }

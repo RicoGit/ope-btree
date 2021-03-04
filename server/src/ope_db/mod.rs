@@ -134,7 +134,7 @@ where
 }
 
 /// All data needed to persist changes from the outside of Database
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct DatasetChanged {
     new_m_root: Hash,
     new_version: usize,
