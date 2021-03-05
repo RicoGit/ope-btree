@@ -286,27 +286,11 @@ where
         node.ok_or_else(|| BTreeErr::illegal_state("Root not isn't exists"))
     }
 
-    /// Generates new btree node reference
-    async fn next_node_ref(&self) -> NodeId {
-        let mut store = self.node_store.write().await;
-        store.next_id()
-    }
-
     pub(self) async fn read_node(&self, node_id: NodeId) -> Result<Option<Node>> {
         log::debug!("Read node: id={:?}", node_id);
-
         let lock = self.node_store.read().await;
         let node = lock.get(node_id).await?;
         Ok(node)
-    }
-
-    /// Saves specified node to tree store
-    pub(self) async fn write_node(&mut self, node_id: NodeId, node: Node) -> Result<()> {
-        log::debug!("Write node: id={:?} node={:?}", node_id, &node);
-
-        let mut lock = self.node_store.write().await;
-        lock.set(node_id, node).await?;
-        Ok(())
     }
 
     /// Saves all changed nodes to tree store. Apply `task` to old tree state for getting new tree state.
@@ -328,7 +312,7 @@ where
         let mut store = self.node_store.write().await;
 
         for NodeWithId { id, node } in task.nodes_to_save {
-            log::trace!("Store: {}={:?}", id, node);
+            log::trace!("Saving: {}={:?}", id, node);
             store.set(id, node).await?;
         }
         // todo end transaction
@@ -518,21 +502,5 @@ mod tests {
 
             tree.put(cmd2).await.unwrap();
         }
-    }
-
-    #[tokio::test]
-    async fn load_save_node_test() {
-        // Test private methods 'read_node' and 'write_node'
-        let node_store = create_node_store(0);
-        let mut tree = create_tree(node_store);
-
-        let leaf1 = tree.read_node(1).await;
-        assert_eq!(leaf1.unwrap(), None);
-
-        let put = tree.write_node(1, Node::empty_leaf()).await;
-        assert_eq!(put.unwrap(), ());
-
-        let leaf2 = tree.read_node(1).await;
-        assert_eq!(leaf2.unwrap(), Some(Node::empty_leaf()))
     }
 }

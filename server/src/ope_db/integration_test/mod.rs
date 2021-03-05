@@ -19,7 +19,7 @@ use protocol::database::OpeDatabaseRpc;
 use protocol::{ProtocolError, RpcFuture};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use tokio::sync::mpsc::{channel, Sender};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Mutex;
 
 #[tokio::test]
@@ -83,6 +83,23 @@ async fn update_single_item_test() {
     assert_eq!(client.put(k(1), v(42)).await.unwrap(), Some(v(1)));
     assert_eq!(client.get(k(1)).await.unwrap(), Some(v(42)));
     assert_eq!(rx.recv().await.unwrap(), dc("[[k1][v42]]", 2));
+}
+
+#[tokio::test]
+async fn one_depth_tree_test() {
+    // put 4 and get them back (tree depth 1)
+    init_logger();
+
+    let (tx, rx) = channel::<DatasetChanged>(1);
+    let db = create_server(tx).await;
+    let client = create_client(db);
+
+    // fill root node with 4 keys
+    let changes = put(4, &client, rx).await;
+    assert_eq!(changes, dc("[[k1][v1]][[k2][v2]][[k3][v3]][[k4][v4]]", 4));
+
+    // get all keys back
+    get(4, &client).await;
 }
 
 struct TestDatabaseRpc {
@@ -279,6 +296,33 @@ fn v(idx: usize) -> String {
 fn h(str: &str) -> Hash {
     Hash::build::<NoOpHasher, _>(str.as_bytes())
 }
+
 fn dc(hash: &str, version: usize) -> DatasetChanged {
     DatasetChanged::new(h(hash), version, Bytes::new())
+}
+
+/// Puts n items and returns last MerkelRoot
+async fn put(
+    n: usize,
+    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+    mut rx: Receiver<DatasetChanged>,
+) -> DatasetChanged {
+    let mut m_root = None;
+    for idx in 1..n + 1 {
+        let res = client.put(k(idx), v(idx)).await;
+        assert_eq!(res.unwrap(), None);
+        m_root = rx.recv().await;
+        assert!(m_root.is_some());
+    }
+    m_root.unwrap()
+}
+
+async fn get(
+    n: usize,
+    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+) {
+    for idx in 1..n + 1 {
+        let res = client.get(k(idx)).await;
+        assert_eq!(res.unwrap(), Some(v(idx)));
+    }
 }
