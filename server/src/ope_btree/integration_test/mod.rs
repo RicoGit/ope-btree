@@ -91,10 +91,7 @@ async fn two_depth_tree_test() {
     let mut tree = create_server().await;
     let client = create_client();
 
-    // fill root node with 4 keys
     put(10, &mut tree, &client).await;
-
-    // get all keys back
     get(10, &mut tree, &client).await;
 }
 
@@ -106,10 +103,7 @@ async fn three_depth_tree_test() {
     let mut tree = create_server().await;
     let client = create_client();
 
-    // fill root node with 4 keys
     put(20, &mut tree, &client).await;
-
-    // get all keys back
     get(20, &mut tree, &client).await;
 }
 
@@ -121,10 +115,7 @@ async fn five_depth_tree_test() {
     let mut tree = create_server().await;
     let client = create_client();
 
-    // fill root node with 4 keys
     put(200, &mut tree, &client).await;
-
-    // get all keys back
     get(200, &mut tree, &client).await;
 }
 
@@ -136,10 +127,7 @@ async fn five_depth_tree_reverse_test() {
     let mut tree = create_server().await;
     let client = create_client();
 
-    // fill root node with 4 keys
     reverse_put(200, &mut tree, &client).await;
-
-    // get all keys back
     reverse_get(200, &mut tree, &client).await;
 }
 

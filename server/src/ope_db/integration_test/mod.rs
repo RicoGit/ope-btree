@@ -94,12 +94,76 @@ async fn one_depth_tree_test() {
     let db = create_server(tx).await;
     let client = create_client(db);
 
-    // fill root node with 4 keys
     let changes = put(4, &client, rx).await;
     assert_eq!(changes, dc("[[k1][v1]][[k2][v2]][[k3][v3]][[k4][v4]]", 4));
 
-    // get all keys back
     get(4, &client).await;
+}
+
+#[tokio::test]
+async fn two_depth_tree_test() {
+    // put 10 and get them back (tree depth 2)
+    init_logger();
+
+    let (tx, rx) = channel::<DatasetChanged>(1);
+    let db = create_server(tx).await;
+    let client = create_client(db);
+
+    let n = 10;
+    let changes = put(n, &client, rx).await;
+    // k1-k2-k6 - root
+    // k1-k10-k2 | k3-k4 | k5-k6 | k7-k8-k9 - leaves
+    assert_eq!(changes, dc("[k2][k4][k6][[[k1][v1]][[k10][v10]][[k2][v2]]][[[k3][v3]][[k4][v4]]][[[k5][v5]][[k6][v6]]][[[k7][v7]][[k8][v8]][[k9][v9]]]", n));
+
+    get(n, &client).await
+}
+
+#[tokio::test]
+async fn three_depth_tree_test() {
+    // put 20 and get them back (tree depth 3)
+    init_logger();
+
+    let (tx, rx) = channel::<DatasetChanged>(1);
+    let db = create_server(tx).await;
+    let client = create_client(db);
+
+    let n = 20;
+    let changes = put(n, &client, rx).await;
+    assert_eq!(changes.new_version, n);
+
+    get(n, &client).await
+}
+
+#[tokio::test]
+async fn five_depth_tree_test() {
+    // put 200 and get them back (tree depth 5)
+    init_logger();
+
+    let (tx, rx) = channel::<DatasetChanged>(1);
+    let db = create_server(tx).await;
+    let client = create_client(db);
+
+    let n = 200;
+    let changes = put(n, &client, rx).await;
+    assert_eq!(changes.new_version, n);
+
+    get(n, &client).await
+}
+
+#[tokio::test]
+async fn five_depth_tree_reverse_test() {
+    // put 200 in reverse order and get them back (tree depth 5)
+    init_logger();
+
+    let (tx, rx) = channel::<DatasetChanged>(1);
+    let db = create_server(tx).await;
+    let client = create_client(db);
+
+    let n = 200;
+    let changes = reverse_put(n, &client, rx).await;
+    assert_eq!(changes.new_version, n);
+
+    reverse_get(n, &client).await
 }
 
 struct TestDatabaseRpc {
@@ -317,11 +381,37 @@ async fn put(
     m_root.unwrap()
 }
 
+/// Puts n items and returns last MerkelRoot
+async fn reverse_put(
+    n: usize,
+    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+    mut rx: Receiver<DatasetChanged>,
+) -> DatasetChanged {
+    let mut m_root = None;
+    for idx in (1..n + 1).rev() {
+        let res = client.put(k(idx), v(idx)).await;
+        assert_eq!(res.unwrap(), None);
+        m_root = rx.recv().await;
+        assert!(m_root.is_some());
+    }
+    m_root.unwrap()
+}
+
 async fn get(
     n: usize,
     client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
 ) {
     for idx in 1..n + 1 {
+        let res = client.get(k(idx)).await;
+        assert_eq!(res.unwrap(), Some(v(idx)));
+    }
+}
+
+async fn reverse_get(
+    n: usize,
+    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+) {
+    for idx in (1..n + 1).rev() {
         let res = client.get(k(idx)).await;
         assert_eq!(res.unwrap(), Some(v(idx)));
     }
