@@ -1,9 +1,8 @@
 ### Engine for searching over encrypted data.
 
-**This is not a working version! It's under rapid development!**
+**Get and Put operations are implemented and working fine, but OpeDatabse isn't ready for use**
 
 related paper: https://eprint.iacr.org/2013/129.pdf
-
 
 ### Before git push execute:
 
@@ -22,6 +21,26 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 
 - BTree operarates only bytes, there is no needed to different K and V
 - Only tree client now what is actually type of K and V
+- Maybe consider using channels instead of callbacks
 
 
-todo consider use channels instead of callbacks
+### Progress
+
+- [x] create base entities (Node, Cmd, MPath, etc.)
+- [x] implement KVStore
+- [x] implement get operation
+- [x] implement put operation
+- [x] integration test for BTree
+- [x] create Database
+- [x] integration test for Database
+- [ ] implement transport (Grpc)
+- [ ] make integration test with real transport
+- [ ] create CI with Github actions
+- [ ] make distribution for server (build docker image)
+- [ ] make cli client
+- [ ] make wasm cli
+- [ ] verifying non-trivial rebalancing
+- [ ] fix all todos
+- [ ] implement range operation (when Streams will be stabilized) 
+- [ ] implement delete operation 
+- [ ] implement rockDb backend for all KVStores
