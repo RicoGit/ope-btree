@@ -165,7 +165,7 @@ where
         } else {
             Err(BTreeClientError::wrong_proof(
                 key,
-                keys.clone(),
+                keys,
                 children_hashes,
                 &m_root,
             ))
@@ -207,7 +207,7 @@ where
         } else {
             Err(BTreeClientError::wrong_proof(
                 key,
-                keys.clone(),
+                keys,
                 children_hashes,
                 &m_root,
             ))

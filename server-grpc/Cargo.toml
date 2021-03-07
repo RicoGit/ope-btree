@@ -1,0 +1,21 @@
+[package]
+name = "server-grpc"
+version = "0.1.0"
+authors = ["Constantine Solovev <constantine.solovev@gmail.com>"]
+edition = "2018"
+build = "../build.rs"
+
+[dependencies]
+
+server = { path = "../server" }
+
+# Grpc
+tonic = "0.4"
+prost = "0.7"
+
+[build-dependencies]
+tonic-build = "0.4"
+
+[[bin]]
+name = "server-grpc"
+path = "src/main.rs"

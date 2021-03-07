@@ -100,7 +100,7 @@ impl<Digest: common::Digest> BTreeVerifier<Digest> {
     ) -> Hash {
         let mut encrypted_key = Hash::build::<Digest, _>(put_details.key);
         let val_checksum = Hash::from(put_details.val_hash);
-        encrypted_key.concat(val_checksum.clone());
+        encrypted_key.concat(val_checksum);
         let kv_hash = Hash::build::<Digest, _>(encrypted_key);
 
         match put_details.search_result {
@@ -137,6 +137,12 @@ impl<Digest: common::Digest> BTreeVerifier<Digest> {
     /// `m_path` The merkle path already passed from tree root
     fn expected_checksum(&self, m_root: Hash, m_path: MerklePath) -> Hash {
         m_path.last_proof_children_hash().cloned().unwrap_or(m_root)
+    }
+}
+
+impl<Digest: common::Digest> Default for BTreeVerifier<Digest> {
+    fn default() -> Self {
+        BTreeVerifier::new()
     }
 }
 

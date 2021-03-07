@@ -132,10 +132,10 @@ where
             )
             .and_then(|search_res| {
                 // update idx in last proof if exists
-                self.m_path
-                    .0
-                    .last_mut()
-                    .map(|proof| proof.set_idx(search_res.idx()));
+
+                if let Some(proof) = self.m_path.0.last_mut() {
+                    proof.set_idx(search_res.idx())
+                }
 
                 self.encryptor
                     .encrypt(self.key.clone())

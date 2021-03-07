@@ -4,5 +4,6 @@ members = [
     "client",
     "common",
     "server",
+    "server-grpc",
     "protocol",
 ]

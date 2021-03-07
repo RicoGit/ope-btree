@@ -34,7 +34,7 @@ impl Decryptor for NoOpCrypt {
     type PlainData = String;
 
     fn decrypt(&self, encrypted_data: &[u8]) -> Result<String> {
-        Ok(String::from_utf8_lossy(encrypted_data.as_ref()).to_string())
+        Ok(String::from_utf8_lossy(encrypted_data).to_string())
     }
 }
 
