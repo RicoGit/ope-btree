@@ -1,0 +1,164 @@
+syntax = "proto3";
+
+package opebtree;
+
+// GET: Server requests
+message GetCallback {
+    oneof callback {
+        // sends found value to client
+        GetValue value = 1;
+
+        // ask index of search key in branch
+        AskNextChildIndex nextChildIndex = 10;
+        // ask index of search key in leaf
+        AskSubmitLeaf submitLeaf = 11;
+
+        // sends server error to client
+        Error serverError = 20;
+    }
+}
+
+// GET: Client replies
+message GetCallbackReply {
+    oneof reply {
+        // client sends database info (id and version)
+        DbInfo dbInfo = 1;
+
+        // client sends results of searching a key in the leaf
+        ReplyNextChildIndex nextChildIndex = 10;
+        // client sends results of searching a key in the leaf
+        ReplySubmitLeaf submitLeaf = 11;
+
+        // client sends client error to server
+        Error clientError = 20;
+    }
+
+}
+
+// PUT: Server requests
+message PutCallback {
+    oneof callback {
+        // server sends previous stored value to client
+        PreviousValue value = 1;
+
+        // server asks index of search key in branch
+        AskNextChildIndex nextChildIndex = 10;
+
+        // server asks index of search key in leaf and other details for putting
+        AskPutDetails putDetails = 20;
+        // server asks verify made changes
+        AskVerifyChanges verifyChanges = 21;
+        // server confirms that all changes was persisted
+        AskChangesStored changesStored = 22;
+
+        // server sends server error to client
+        Error serverError = 30;
+    }
+}
+
+// PUT: Client replies
+message PutCallbackReply {
+    oneof reply {
+        // Initial (first) message in a client-server round trip.
+        // client sends database info (id and version)
+        DbInfo dbInfo = 1;
+        // client sends value for putting
+        PutValue value = 2;
+
+        // client sends index of search key in branch
+        ReplyNextChildIndex nextChildIndex = 10;
+
+        // client sends index of search key in leaf and other details for putting
+        ReplyPutDetails putDetails = 20;
+        // client confirms made changes
+        ReplyVerifyChanges verifyChanges = 21;
+        // client confirms server confirmation
+        ReplyChangesStored changesStored = 22;
+
+        // client sends client error to server
+        Error clientError = 30;
+    }
+}
+
+
+message DbInfo {
+    // database id
+    bytes id = 1;
+    // expected database version
+    int64 version = 2;
+}
+
+//
+// BtreeCallback commands
+//
+message AskNextChildIndex {
+    repeated bytes keys = 1;
+    repeated bytes childrenChecksums = 2;
+}
+
+message ReplyNextChildIndex {
+    int32 index = 1;
+}
+
+//
+// SearchCallback commands
+//
+message AskSubmitLeaf {
+    repeated bytes keys = 1;
+    repeated bytes valuesChecksums = 2;
+}
+
+message ReplySubmitLeaf {
+    oneof searchResult {
+        int32 found = 1;
+        int32 insertionPoint = 2;
+    }
+}
+
+message GetValue {
+    bytes value = 1;
+}
+
+message Error {
+    string code = 1;
+    string description = 2;
+}
+
+//
+// PutCallbacks commands
+//
+message AskPutDetails {
+    repeated bytes keys = 1;
+    repeated bytes valuesChecksums = 2;
+}
+
+message ReplyPutDetails {
+    bytes key = 1;
+    bytes checksum = 2;
+
+    oneof searchResult {
+        int32 found = 3;
+        int32 insertionPoint = 4;
+    }
+}
+
+message AskVerifyChanges {
+    bytes serverMerkleRoot = 1;
+    bool wasSplit = 2;
+}
+
+message ReplyVerifyChanges {
+    // Signature for concatenation of version and serverMerkleRoot
+    bytes signature = 1;
+}
+
+message AskChangesStored {}
+message ReplyChangesStored {}
+
+message PreviousValue {
+    bytes value = 1;
+}
+
+message PutValue {
+    bytes value = 1;
+}

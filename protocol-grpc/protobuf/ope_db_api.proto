@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package opebtree.database;
+
+import "ope_btree.proto";
+
+service DbRpc {
+    // Represents one Get operation with multiple round trip between client and server.
+    rpc get(stream GetCallbackReply) returns (stream GetCallback);
+
+    // Represents one Put operation with multiple round trip between client and server.
+    rpc put(stream PutCallbackReply) returns (stream PutCallback);
+}
+
