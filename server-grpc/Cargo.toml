@@ -8,6 +8,10 @@ build = "../build.rs"
 [dependencies]
 
 server = { path = "../server" }
+kvstore-api = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
+kvstore-inmemory = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
+
+tokio = { version ="1.0", features = ["full"] }
 
 # Grpc
 tonic = "0.4"

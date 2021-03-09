@@ -3,11 +3,14 @@
 
 use crate::ope_btree::command::Cmd;
 use crate::ope_btree::internal::node::TreeNode;
-use crate::ope_btree::{BTreeErr, OpeBTree};
+use crate::ope_btree::internal::node_store::BinaryNodeStore;
+use crate::ope_btree::{BTreeErr, OpeBTree, OpeBTreeConf, ValRefGen};
 use bytes::Bytes;
+use common::gen::NumGen;
 use common::{Digest, Hash};
 use kvstore_api::kvstore::KVStore;
 use kvstore_api::kvstore::*;
+use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use protocol::btree::{BtreeCallback, PutCallback, SearchCallback};
 use std::sync::Arc;
 use thiserror::Error;
@@ -149,6 +152,18 @@ impl DatasetChanged {
             client_signature,
         }
     }
+}
+
+/// Creates empty in-memory database.
+pub fn new_in_memory_db<D: Digest + 'static>(
+    conf: OpeBTreeConf,
+    update_channel: Sender<DatasetChanged>,
+) -> OpeDatabase<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>, D> {
+    let node_store = BinaryNodeStore::new(HashMapKVStore::new(), NumGen(0));
+    let index = OpeBTree::new(conf, node_store, ValRefGen(0));
+    let value_store = HashMapKVStore::<Bytes, Bytes>::new();
+
+    OpeDatabase::new(index, value_store, update_channel)
 }
 
 #[cfg(test)]
