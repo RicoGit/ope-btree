@@ -67,7 +67,7 @@ where
     }
 
     /// Database initialization
-    async fn init(&mut self) -> Result<()> {
+    async fn init(&self) -> Result<()> {
         let mut idx = self.index.write().await;
         idx.init().await?;
         Ok(())
@@ -78,7 +78,7 @@ where
     ///
     /// `search_callback` - Wrapper for all callback needed for 'Get' operation to the BTree
     ///
-    pub async fn get<'a, Scb>(&mut self, search_callback: Scb) -> Result<Option<Bytes>>
+    pub async fn get<'a, Scb>(&self, search_callback: Scb) -> Result<Option<Bytes>>
     where
         Scb: SearchCallback + 'a,
     {
@@ -100,7 +100,7 @@ where
     /// `version` Dataset version expected to the client
     /// `encrypted_value` Encrypted value
     pub async fn put<'a, Scb>(
-        &mut self,
+        &self,
         put_callback: Scb,
         version: usize,
         encrypted_value: Bytes,
@@ -168,7 +168,7 @@ mod tests {
     async fn new_test() {
         let (tx, _rx) = channel::<DatasetChanged>(1);
         let index = create_tree(create_node_store(0));
-        let mut db = OpeDatabase::new(index, HashMapKVStore::new(), tx);
+        let db = OpeDatabase::new(index, HashMapKVStore::new(), tx);
         assert!(db.init().await.is_ok())
     }
 
@@ -203,7 +203,7 @@ mod tests {
         tx: Sender<DatasetChanged>,
     ) -> OpeDatabase<BinStore, HashMapKVStore<Bytes, Bytes>, NoOpHasher> {
         let index = create_tree(create_node_store(0));
-        let mut db = OpeDatabase::new(index, HashMapKVStore::new(), tx);
+        let db = OpeDatabase::new(index, HashMapKVStore::new(), tx);
         assert!(db.init().await.is_ok());
         db
     }

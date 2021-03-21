@@ -189,7 +189,7 @@ impl OpeDatabaseRpc for TestDatabaseRpc {
         let cb = TestCb::search(Box::new(search_callback));
 
         async move {
-            let mut lock = db.lock().await;
+            let lock = db.lock().await;
             lock.get(cb)
                 .map_err(|err| ProtocolError::RpcErr {
                     msg: err.to_string(),
@@ -210,7 +210,7 @@ impl OpeDatabaseRpc for TestDatabaseRpc {
         let cb = TestCb::put(Box::new(put_callback));
 
         async move {
-            let mut lock = db.lock().await;
+            let lock = db.lock().await;
             lock.put(cb, version, encrypted_value)
                 .map_err(|err| ProtocolError::RpcErr {
                     msg: err.to_string(),
@@ -325,7 +325,7 @@ async fn create_server(
     let node_store = BinaryNodeStore::new(HashMapKVStore::new(), NumGen(0));
     let value_store = HashMapKVStore::new();
     let index = OpeBTree::new(conf, node_store, ValRefGen(100));
-    let mut db = OpeDatabase::new(index, value_store, sender);
+    let db = OpeDatabase::new(index, value_store, sender);
     db.init().await.unwrap();
     db
 }
