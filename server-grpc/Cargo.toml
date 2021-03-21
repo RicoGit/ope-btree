@@ -9,6 +9,7 @@ build = "../build.rs"
 
 server = { path = "../server" }
 common = { path = "../common" }
+protocol = { path = "../protocol" }
 kvstore-api = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
 kvstore-inmemory = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
 
@@ -16,6 +17,8 @@ log = "0.4"
 thiserror = "1.0"
 tokio = { version ="1.0", features = ["full"] }
 futures = "0.3"
+tokio-stream = "0.1.5"
+#async-stream = "0.3"
 
 # Grpc
 tonic = "0.4"
