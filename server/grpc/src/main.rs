@@ -1,9 +1,8 @@
 use common::noop_hasher::NoOpHasher;
-use server::ope_btree::OpeBTreeConf;
-use tonic::transport::Server;
-use std::error::Error;
-use std::env;
 use env_logger::Env;
+use server::ope_btree::OpeBTreeConf;
+use std::error::Error;
+use tonic::transport::Server;
 
 // Grpc-based protocol implementation
 mod grpc;
@@ -29,5 +28,4 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
         .await?;
 
     Ok(())
-
 }

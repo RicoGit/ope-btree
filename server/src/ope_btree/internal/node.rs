@@ -108,10 +108,8 @@ impl LeafNode {
     ) -> LeafNode {
         assert!(
             idx == 0 || idx < self.size,
-            format!(
-                "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
-                idx, self.size
-            )
+            "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
+            idx, self.size
         );
 
         misc::replace(&mut self.keys, key, idx);
@@ -133,10 +131,8 @@ impl LeafNode {
     ) -> LeafNode {
         assert!(
             idx <= self.size,
-            format!(
-                "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
-                idx, self.size
-            )
+            "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
+            idx, self.size
         );
 
         self.keys.insert(idx, key);

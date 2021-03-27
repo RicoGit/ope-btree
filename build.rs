@@ -6,10 +6,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tonic_build::configure().build_server(true).compile(
         &[
-            "../protocol-grpc/protobuf/ope_btree.proto",
-            "../protocol-grpc/protobuf/ope_db_api.proto",
+            "../../protocol-grpc/protobuf/ope_btree.proto",
+            "../../protocol-grpc/protobuf/ope_db_api.proto",
         ],
-        &["../protocol-grpc/protobuf/"],
+        &["../../protocol-grpc/protobuf/"],
     )?;
     Ok(())
 }

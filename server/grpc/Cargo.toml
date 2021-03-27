@@ -3,13 +3,13 @@ name = "server-grpc"
 version = "0.1.0"
 authors = ["Constantine Solovev <constantine.solovev@gmail.com>"]
 edition = "2018"
-build = "../build.rs"
+build = "../../build.rs"
 
 [dependencies]
 
-server = { path = "../server" }
-common = { path = "../common" }
-protocol = { path = "../protocol" }
+server = { path = "../" }
+common = { path = "../../common" }
+protocol = { path = "../../protocol" }
 kvstore-api = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
 kvstore-inmemory = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
 
