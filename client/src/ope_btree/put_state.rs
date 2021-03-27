@@ -75,16 +75,16 @@ where
     Crypt: Decryptor<PlainData = Key> + Encryptor<PlainData = Key>,
 {
     /// Case when server asks next child
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
         keys: Vec<Bytes>,
-        children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize> {
+        children_checksums: Vec<Bytes>,
+    ) -> RpcFuture<usize> {
         log::debug!(
             "next_child_idx starts for {:?}, keys={:?}, children_hashes={:?}",
             &self,
             keys,
-            children_hashes
+            children_checksums
         );
 
         let result = self
@@ -94,7 +94,7 @@ where
                 self.m_root().clone(),
                 &mut self.m_path,
                 keys.into_iter().map(common::Key::from).collect(),
-                children_hashes.into_iter().map(Hash::from).collect(),
+                children_checksums.into_iter().map(Hash::from).collect(),
             )
             .map_err(Into::into);
 

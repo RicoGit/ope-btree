@@ -276,15 +276,15 @@ pub mod test {
     }
 
     impl<'a> BtreeCallback for PutStateWrapper<'a> {
-        fn next_child_idx<'f>(
+        fn next_child_idx(
             &mut self,
             keys: Vec<Bytes>,
-            children_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, usize> {
+            children_checksums: Vec<Bytes>,
+        ) -> RpcFuture<usize> {
             self.state
                 .lock()
                 .unwrap()
-                .next_child_idx(keys, children_hashes)
+                .next_child_idx(keys, children_checksums)
         }
     }
 

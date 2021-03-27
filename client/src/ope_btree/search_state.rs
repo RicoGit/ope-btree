@@ -50,11 +50,11 @@ where
     Dec: Decryptor<PlainData = Key>,
 {
     /// Case when server asks next child
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
         keys: Vec<Bytes>,
         children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize> {
+    ) -> RpcFuture<usize> {
         log::debug!(
             "next_child_idx starts for {:?}, keys={:?}, children_hashes={:?}",
             self,

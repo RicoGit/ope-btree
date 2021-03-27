@@ -27,17 +27,17 @@ pub trait BtreeCallback {
     /// # Arguments
     ///
     /// * `keys` - Keys of current branch for searching position
-    /// * `children_hashes` - All children's hashes of current branch
+    /// * `children_checksums` - All children's hashes of current branch
     ///
     /// # Return
     ///
     /// Next child node position.
     ///
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
         keys: Vec<Bytes>,
-        children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize>;
+        children_checksums: Vec<Bytes>,
+    ) -> RpcFuture<usize>;
 }
 
 /// Wrapper for all callbacks needed for BTree's search operation.

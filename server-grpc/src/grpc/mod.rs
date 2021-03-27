@@ -4,7 +4,6 @@ pub mod rpc {
 }
 pub mod errors;
 
-use futures::StreamExt;
 use kvstore_api::kvstore::KVStore;
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use prost::bytes::Bytes;
@@ -14,13 +13,20 @@ use rpc::db_rpc_server::DbRpc;
 use rpc::get_callback_reply::Reply;
 use rpc::DbInfo;
 
+use common::misc::{ToBytes, ToVecBytes};
+use futures::FutureExt;
+use log::*;
+use server::ope_btree::BTreeErr::ProtocolErr;
 use server::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen};
 use server::ope_db::{DatasetChanged, DbError, OpeDatabase};
 use server::Digest;
+use std::error::Error;
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tonic::codegen::Stream;
 use tonic::{Request, Response, Status, Streaming};
 
@@ -114,23 +120,52 @@ pub fn new_in_memory_db<D: Digest + 'static>(
 //     }
 // }
 
-fn db_err_to_status(_err: DbError) -> Status {
-    todo!()
-}
-
-// todo
 struct SearchCb {
+    /// Server sends requests to this channel
     server_requests: Sender<Result<rpc::GetCallback, Status>>,
+    /// Server receives client responses from this stream
     client_replies: Streaming<rpc::GetCallbackReply>,
 }
 
 impl BtreeCallback for SearchCb {
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
-        _keys: Vec<Bytes>,
-        _children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize> {
-        unimplemented!()
+        keys: Vec<Bytes>,
+        children_checksums: Vec<Bytes>,
+    ) -> RpcFuture<usize> {
+        // create server request
+        let request = rpc::GetCallback {
+            callback: Some(rpc::get_callback::Callback::NextChildIdx(
+                rpc::AskNextChildIndex {
+                    keys: keys.into_byte_vec(),
+                    children_checksums: children_checksums.into_byte_vec(),
+                },
+            )),
+        };
+
+        let server_requests = self.server_requests.clone();
+
+        let future = async move {
+            // send request to client
+            if let Err(err) = server_requests.send(Ok(request)).await {
+                return Err(errors::send_err_to_protocol_err(err));
+            }
+
+            // wait response from client
+            let response = self.client_replies.try_next().await;
+            if let Ok(Some(rpc::GetCallbackReply {
+                reply: Some(Reply::NextChildIdx(rpc::ReplyNextChildIndex { index })),
+            })) = response
+            {
+                Ok(index as usize)
+            } else {
+                let err = response.err();
+                log::warn!("Unexpected client's reply: {:?}", &err);
+                Err(errors::opt_status_to_protocol_err(err))
+            }
+        };
+
+        future.boxed()
     }
 }
 
@@ -188,7 +223,6 @@ where
                                 };
                                 // todo we ignore search result here, it should be sent to client via get_callback::Callback::value
                                 db.get(callback).await;
-                                // todo send result to stream
                             });
 
                             // return server request stream

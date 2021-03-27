@@ -262,11 +262,11 @@ impl<Cb: PutCallback> TestCb<Cb> {
 }
 
 impl<Cb: BtreeCallback> BtreeCallback for TestCb<Cb> {
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
         keys: Vec<Bytes>,
         children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize> {
+    ) -> RpcFuture<usize> {
         unsafe {
             self.cb
                 .as_mut()

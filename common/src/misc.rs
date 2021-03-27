@@ -87,6 +87,16 @@ pub fn replace<T>(vector: &mut Vec<T>, item: T, idx: usize) {
     let _ = std::mem::replace(&mut vector[idx], item.into());
 }
 
+pub trait ToVecBytes: Sized {
+    fn into_byte_vec(self) -> Vec<Vec<u8>>;
+}
+
+impl ToVecBytes for Vec<Bytes> {
+    fn into_byte_vec(self) -> Vec<Vec<u8>> {
+        self.into_iter().map(|bytes| bytes.to_vec()).collect()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

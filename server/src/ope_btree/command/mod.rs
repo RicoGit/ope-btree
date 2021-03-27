@@ -66,11 +66,11 @@ pub mod tests {
     }
 
     impl BtreeCallback for TestCallback {
-        fn next_child_idx<'f>(
+        fn next_child_idx(
             &mut self,
             _keys: Vec<Bytes>,
             _children_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, usize> {
+        ) -> RpcFuture<usize> {
             let res = self
                 .next_child_idx_vec
                 .pop()
