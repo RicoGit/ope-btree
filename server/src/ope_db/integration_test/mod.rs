@@ -233,7 +233,9 @@ unsafe impl<Cb> Sync for TestCb<Cb> {}
 impl<Cb> Drop for TestCb<Cb> {
     fn drop(&mut self) {
         if !self.copy {
-            unsafe { Box::from_raw(self.cb) };
+            unsafe {
+                self.cb.drop_in_place();
+            }
         }
     }
 }

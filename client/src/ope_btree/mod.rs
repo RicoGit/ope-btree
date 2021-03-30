@@ -263,16 +263,17 @@ pub mod test {
 
     /// Wraps PutState and used for testing, contains simple blocking Mutex for protect PutState.
     /// Allows use non-cloneable PutState directly in Btree that requires clone.
-    #[derive(Clone, Debug)]
+    #[derive(Debug)]
     pub struct PutStateWrapper<'a> {
         state_ptr: *mut PutState<'a, String, NoOpHasher, NoOpCrypt>,
+        copy: bool,
     }
 
     impl<'a> PutStateWrapper<'a> {
         pub fn new(mut put_state: PutState<'a, String, NoOpHasher, NoOpCrypt>) -> Self {
             let wrapper = PutStateWrapper {
-                // state: Arc::new(Mutex::new(put_state)),
                 state_ptr: &mut put_state,
+                copy: false,
             };
             std::mem::forget(put_state);
             wrapper
@@ -323,6 +324,25 @@ pub mod test {
 
         fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
             unsafe { self.state_ptr.as_mut().unwrap().changes_stored() }
+        }
+    }
+
+    impl Clone for PutStateWrapper<'_> {
+        fn clone(&self) -> Self {
+            PutStateWrapper {
+                state_ptr: self.state_ptr,
+                copy: true,
+            }
+        }
+    }
+
+    impl Drop for PutStateWrapper<'_> {
+        fn drop(&mut self) {
+            unsafe {
+                if !self.copy {
+                    self.state_ptr.drop_in_place()
+                }
+            }
         }
     }
 }
