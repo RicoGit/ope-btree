@@ -38,14 +38,7 @@ impl GrpcDbRpc {
         // client's replies
         let (client_replies, client_replies_out) = tokio::sync::mpsc::channel(1);
 
-        // server's requests
-        let mut server_requests = self
-            .client
-            .get(Request::new(ReceiverStream::new(client_replies_out)))
-            .await
-            .map_err(errors::status_to_protocol_err)?
-            .into_inner();
-
+        log::debug!("Send init Get message to server");
         let db_info_msg = rpc::GetCallbackReply {
             reply: Some(rpc::get_callback_reply::Reply::DbInfo(rpc::DbInfo {
                 id: dataset_id.to_vec(),
@@ -53,11 +46,18 @@ impl GrpcDbRpc {
             })),
         };
 
-        // send init Get message to server
         client_replies
             .send(db_info_msg)
             .await
             .map_err(errors::send_err_to_protocol_err)?;
+
+        // get server's requests stream
+        let mut server_requests = self
+            .client
+            .get(Request::new(ReceiverStream::new(client_replies_out)))  // see server DbRpcImpl::get
+            .await
+            .map_err(errors::status_to_protocol_err)?
+            .into_inner();
 
         // receive server requests
         let mut result = None;
@@ -92,23 +92,14 @@ impl GrpcDbRpc {
                 }
                 // todo impl all cases later
                 other => {
-                    log::warn!("Invalid server request: todo print message") // todo impl Debug for GetCallback
+                    // todo Some(GetCallback { callback: None }) comes when Db return None, should we describe it more clearly?
+                    log::warn!("Invalid server request: {:?}", other) // todo impl Debug for GetCallback
                 }
             }
         }
 
         Ok(result)
     }
-
-    // fn get2<'cb, 's: 'cb, Cb: 'cb + SearchCallback + Send>(
-    //     &'s mut self,
-    //     dataset_id: Bytes,
-    //     version: usize,
-    //     mut search_callback: Cb,
-    // ) -> RpcFuture<'cb, Option<Bytes>> {
-    //     let fut = self.get(dataset_id, version, search_callback);
-    //     fut.boxed::<'cb>()
-    // }
 }
 
 impl OpeDatabaseRpc for GrpcDbRpc {
@@ -118,6 +109,7 @@ impl OpeDatabaseRpc for GrpcDbRpc {
         version: usize,
         search_callback: Cb,
     ) -> RpcFuture<'cb, Option<Bytes>> {
+        log::debug!("OpeDatabaseRpc::get({:?},{:?})", dataset_id, version);
         let fut = self.get(dataset_id, version, search_callback);
         fut.boxed::<'cb>()
     }

@@ -18,7 +18,7 @@ use futures::FutureExt;
 use log::*;
 use server::ope_btree::BTreeErr::ProtocolErr;
 use server::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen};
-use server::ope_db::{DatasetChanged, OpeDatabase};
+use server::ope_db::{DatasetChanged, DbError, OpeDatabase};
 use server::Digest;
 use std::future::Future;
 use std::pin::Pin;
@@ -37,11 +37,12 @@ where
     db: Arc<OpeDatabase<NS, VS, D>>,
 }
 
-pub fn new_in_memory_db<D: Digest + 'static>(
+pub async fn new_in_memory_db<D: Digest + 'static>(
     conf: OpeBTreeConf,
     update_channel: Sender<DatasetChanged>,
 ) -> DbRpcImpl<HashMapKVStore<Vec<u8>, Vec<u8>>, HashMapKVStore<Bytes, Bytes>, D> {
     let db = server::ope_db::new_in_memory_db(conf, update_channel);
+    db.init().await.expect("Db initialization is failed");
     DbRpcImpl { db: Arc::new(db) }
 }
 
@@ -58,6 +59,12 @@ impl BtreeCallback for SearchCb {
         keys: Vec<Bytes>,
         children_checksums: Vec<Bytes>,
     ) -> RpcFuture<usize> {
+        log::debug!(
+            "BtreeCallback::next_child_idx({:?},{:?})",
+            keys,
+            children_checksums
+        );
+
         // create server request
         let request = rpc::GetCallback {
             callback: Some(rpc::get_callback::Callback::NextChildIdx(
@@ -97,9 +104,14 @@ impl BtreeCallback for SearchCb {
 impl SearchCallback for SearchCb {
     fn submit_leaf<'f>(
         &mut self,
-        _keys: Vec<Bytes>,
-        _values_hashes: Vec<Bytes>,
+        keys: Vec<Bytes>,
+        values_hashes: Vec<Bytes>,
     ) -> RpcFuture<'f, SearchResult> {
+        log::debug!(
+            "SearchCallback::submit_leaf({:?},{:?})",
+            keys,
+            values_hashes
+        );
         unimplemented!()
     }
 }
@@ -118,6 +130,8 @@ where
         &self,
         request: Request<Streaming<rpc::GetCallbackReply>>,
     ) -> Result<Response<Self::GetStream>, Status> {
+        log::info!("Server received GET request");
+
         let (result_in, result_out) = tokio::sync::oneshot::channel();
 
         // wait first message with DnInfo
@@ -130,7 +144,9 @@ where
                     result_in.send(Err(status));
                 } else {
                     match client_reply.unwrap().reply {
-                        Some(Reply::DbInfo(DbInfo { id: _, version: _ })) => {
+                        Some(Reply::DbInfo(DbInfo { id, version })) => {
+                            log::debug!("Server received DbInfo({:?},{:?})", id, version);
+
                             // get specified Database with required version
                             // todo implement, only one db is supported now
 
@@ -141,13 +157,29 @@ where
                             // starting a client-server round trip
                             let db = self.db.clone();
                             tokio::spawn(async move {
-                                // todo result_in should be put into cb
                                 let callback = SearchCb {
-                                    server_requests: server_requests_in,
+                                    server_requests: server_requests_in.clone(),
                                     client_replies,
                                 };
-                                // todo we ignore search result here, it should be sent to client via get_callback::Callback::value
-                                db.get(callback).await;
+
+                                let search_result = match db.get(callback).await {
+                                    Ok(value) => {
+                                        log::info!("OpeDatabase respond with {:?}", value);
+                                        value.map(|val| {
+                                            rpc::get_callback::Callback::Value(rpc::GetValue {
+                                                value: val.to_vec(),
+                                            })
+                                        })
+                                    }
+                                    Err(db_err) => {
+                                        log::warn!("OpeDatabase respond with ERROR: {:?}", db_err);
+                                        Some(errors::db_err_to_grpc_err(db_err))
+                                    }
+                                };
+
+                                server_requests_in
+                                    .send(Ok(rpc::GetCallback { callback: search_result }))
+                                    .await;
                             });
 
                             // return server request stream
@@ -164,15 +196,15 @@ where
                 }
             }
             None => {
+                log::warn!("Client reply is None");
                 todo!()
             }
-        }
+        };
 
         // return result with stream of server responses
         result_out
             .await
             .map_err(|_| Status::internal("Result channel error"))?
-        // GetRoundTrip::new(Arc::new(self.db), request.into_inner()).get()
     }
 
     type PutStream =

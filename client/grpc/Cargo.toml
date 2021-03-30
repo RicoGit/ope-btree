@@ -20,7 +20,7 @@ tokio-stream = "0.1.5"
 bytes = "1.0"
 
 # Grpc
-tonic = "0.4"
+tonic = "0.4.1"
 prost = "0.7"
 
 [build-dependencies]

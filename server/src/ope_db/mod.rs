@@ -70,7 +70,7 @@ where
     }
 
     /// Database initialization
-    async fn init(&self) -> Result<()> {
+    pub async fn init(&self) -> Result<()> {
         let mut idx = self.index.write().await;
         idx.init().await?;
         Ok(())
