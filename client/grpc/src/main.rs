@@ -1,10 +1,17 @@
+use crate::lib::GrpcDbRpc;
+use bytes::Bytes;
+use client::ope_btree::test::NoOpCrypt;
+use client::ope_btree::OpeBTreeClient;
+use client::ope_db::OpeDatabaseClient;
 use common::noop_hasher::NoOpHasher;
+use common::Hash;
 use env_logger::Env;
+use lib::rpc::db_rpc_client::DbRpcClient;
 use std::error::Error;
-use tonic::transport::Server;
-use lib::rpc::db_rpc_client::{DbRpcClient};
-use tonic::Request;
+use std::sync::atomic::AtomicUsize;
 use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Server;
+use tonic::Request;
 
 mod lib;
 
@@ -16,23 +23,24 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
 
     let addr = "http://[::1]:7777";
     let mut client = DbRpcClient::connect(addr).await?;
-    
+    let rpc = lib::GrpcDbRpc::new(client);
+
     log::info!("Connected to {}", addr);
 
-    // create channel for putting out to get
-    let(client_replies_in, client_replies_out) = tokio::sync::mpsc::channel(1);
+    // Creates client for String Key and Val, dummy Hasher and without Encryption
+    let index = OpeBTreeClient::<NoOpCrypt, NoOpHasher>::new(Hash::empty(), NoOpCrypt {}, ());
+    let mut db_client = OpeDatabaseClient::<NoOpCrypt, NoOpCrypt, NoOpHasher, GrpcDbRpc>::new(
+        index,
+        NoOpCrypt {},
+        rpc,
+        AtomicUsize::new(42),
+        Bytes::from("dataset_id"),
+    );
 
-    // execute get for getting server requests stream
-    let server_requests = client.get(Request::new(ReceiverStream::new(client_replies_out))).await?;
-
-    // iterate over server stream and put to channel client replies
-
-    let get_k1_resp = lib::ClientSearchCb::new(
-        server_requests.into_inner(),
-        client_replies_in
-    ).get_round_trip::<String, String>("k1".to_string())?;
-
-    log::info!("get k1 response: {:?}", get_k1_resp);
+    log::info!("Send GET k1");
+    let k1 = "k1".to_string();
+    let res1 = db_client.get(k1).await?;
+    log::info!("Response: {:?}", res1);
 
     Ok(())
 }

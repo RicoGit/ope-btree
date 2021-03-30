@@ -13,7 +13,7 @@ use rpc::db_rpc_server::DbRpc;
 use rpc::get_callback_reply::Reply;
 use rpc::DbInfo;
 
-use common::misc::{ToBytes, ToVecBytes};
+use common::misc::{FromVecBytes, ToBytes, ToVecBytes};
 use futures::FutureExt;
 use log::*;
 use server::ope_btree::BTreeErr::ProtocolErr;
@@ -44,80 +44,6 @@ pub fn new_in_memory_db<D: Digest + 'static>(
     let db = server::ope_db::new_in_memory_db(conf, update_channel);
     DbRpcImpl { db: Arc::new(db) }
 }
-
-// struct GetRoundTrip<NS, VS, D>
-// where
-//     NS: KVStore<Vec<u8>, Vec<u8>>,
-//     VS: KVStore<Bytes, Bytes>,
-// {
-//     client_replies: Streaming<rpc::GetCallbackReply>,
-//     db: Arc<OpeDatabase<NS, VS, D>>,
-// }
-//
-// impl<NS, VS, D> GetRoundTrip<NS, VS, D>
-// where
-//     NS: KVStore<Vec<u8>, Vec<u8>> + Send + Sync + 'static,
-//     VS: KVStore<Bytes, Bytes> + Send + Sync + 'static,
-//     D: Digest + Send + Sync + 'static,
-// {
-//
-//     fn new(db: Arc<OpeDatabase<NS, VS, D>>, client_replies: Streaming<rpc::GetCallbackReply>) -> Self {
-//       GetRoundTrip { client_replies, db }
-//     }
-//
-//     async fn get(mut self) -> Result<Response<<DbRpcImpl::<NS, VS, D> as DbRpc>::GetStream>, Status> {
-//         let (result_in, result_out) = tokio::sync::oneshot::channel();
-//
-//         // spawn background processing
-//         tokio::spawn(async move {
-//             // channel with size 1 allows make sure that one request corresponds to single response
-//             let (get_stream_in, get_stream_out) = tokio::sync::mpsc::channel(1);
-//
-//             // todo add timeout for replies
-//             while let Some(client_reply) = self.client_replies.next().await {
-//                 if let Err(status) = client_reply {
-//                     log::warn!("Client's reply error: {:?}", status);
-//                     result_in.send(Err(status));
-//                     break;
-//                 }
-//
-//                 match client_reply.unwrap().reply {
-//                     Some(Reply::DbInfo(DbInfo { id, version })) => {
-//                         // todo: do nothing, many db is not supported yet
-//                         log::info!("Client ask db: {:?}, version: {:?}", id, version);
-//                         // this is a final step returned search result
-//
-//                         // tokio::spawn(async )
-//                         let result = self.db.get(todo!()).await;
-//                         // here we need stream not a response
-//                         get_stream_in.send(result.map_err(db_err_to_status));
-//                     }
-//                     Some(reply @ Reply::NextChildIdx(ReplyNextChildIndex { index })) => {
-//                         log::info!("Client reply with nextChildIndex: {:?}", index);
-//                         // todo can I call callback methods instead of using channel?
-//                         // get_stream_in.send(reply).await; // send client result as is
-//                     }
-//                     Some(Reply::SubmitLeaf(ReplySubmitLeaf { search_result })) => todo!(),
-//                     Some(Reply::ServerError(err)) => {
-//                         todo!()
-//                     }
-//                     None => {
-//                         let msg = "Empty reply from client";
-//                         log::warn!("{}", msg);
-//                         result_in.send(Err(Status::invalid_argument(msg.to_string())));
-//                         break;
-//                     }
-//                 }
-//             }
-//         });
-//
-//         // return result with stream of server responses
-//         result_out
-//             .await
-//             .map_err(|_| Status::internal("Result channel error"))?
-//
-//     }
-// }
 
 struct SearchCb {
     /// Server sends requests to this channel

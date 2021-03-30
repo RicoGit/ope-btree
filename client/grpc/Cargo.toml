@@ -7,7 +7,7 @@ build = "../../build.rs"
 
 [dependencies]
 
-client = { path = "../" }
+client = { path = "../", features = ["test"]}
 common = { path = "../../common" }
 protocol = { path = "../../protocol" }
 
@@ -17,6 +17,7 @@ thiserror = "1.0"
 tokio = { version ="1.0", features = ["full"] }
 futures = "0.3"
 tokio-stream = "0.1.5"
+bytes = "1.0"
 
 # Grpc
 tonic = "0.4"

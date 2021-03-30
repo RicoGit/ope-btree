@@ -1,10 +1,8 @@
 //! Implementation of Btree node.
 
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use common::merkle::NodeProof;
-use common::misc::ToBytes;
 use common::{misc, Digest, Hash, Key};
 
 use crate::ope_btree::{NodeId, ValueRef};
@@ -109,7 +107,8 @@ impl LeafNode {
         assert!(
             idx == 0 || idx < self.size,
             "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
-            idx, self.size
+            idx,
+            self.size
         );
 
         misc::replace(&mut self.keys, key, idx);
@@ -132,7 +131,8 @@ impl LeafNode {
         assert!(
             idx <= self.size,
             "Index should be between 0 and size of leaf, idx={}, leaf.size={}",
-            idx, self.size
+            idx,
+            self.size
         );
 
         self.keys.insert(idx, key);
@@ -380,24 +380,6 @@ pub struct ChildRef {
 impl ChildRef {
     pub fn new(id: NodeId, checksum: Hash) -> Self {
         ChildRef { id, checksum }
-    }
-}
-
-pub trait AsBytes {
-    /// Clone as bytes
-    fn clone_as_bytes(&self) -> Vec<Bytes>;
-
-    /// Converts into Bytes without copying
-    fn into_bytes(self) -> Vec<Bytes>;
-}
-
-impl<T: ToBytes + Clone> AsBytes for Vec<T> {
-    fn clone_as_bytes(&self) -> Vec<Bytes> {
-        self.iter().map(|t| t.clone().bytes()).collect()
-    }
-
-    fn into_bytes(self) -> Vec<Bytes> {
-        self.into_iter().map(|t| t.bytes()).collect()
     }
 }
 

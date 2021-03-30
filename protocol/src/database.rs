@@ -13,12 +13,13 @@ pub trait OpeDatabaseRpc {
     /// `search_callback` Wrapper for all callback needed for ''Get'' operation to the BTree
     ///
     /// Returns found value, None if nothing was found.
-    fn get<'f, Cb: SearchCallback + 'f>(
-        &self,
+    fn get<'cb, 's: 'cb, Cb: 'cb + SearchCallback + Send>(
+        &'s mut self,
         dataset_id: Bytes,
         version: usize,
         search_callback: Cb,
-    ) -> RpcFuture<'f, Option<Bytes>>;
+    ) -> RpcFuture<'cb, Option<Bytes>>;
+    // todo consider remove 'cb at all
 
     /// Initiates 'Put' operation in remote OpeBTree.
     ///

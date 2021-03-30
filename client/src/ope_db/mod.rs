@@ -24,9 +24,9 @@ impl<Key, Val, KeyCrypt, ValCrypt, Digest, Rpc> OpeDatabaseClient<KeyCrypt, ValC
 where
     Key: Ord + Send + Clone + Debug,
     Val: Clone + Debug,
-    KeyCrypt: Encryptor<PlainData = Key> + Decryptor<PlainData = Key> + Clone,
+    KeyCrypt: Encryptor<PlainData = Key> + Decryptor<PlainData = Key> + Clone + Send,
     ValCrypt: Encryptor<PlainData = Val> + Decryptor<PlainData = Val>,
-    Digest: common::Digest + Clone,
+    Digest: common::Digest + Clone + Send,
     Rpc: OpeDatabaseRpc,
 {
     pub fn new(
@@ -50,7 +50,7 @@ where
     /// `key` The key retrieve the value.
     ///
     /// Returns found value, None if nothing was found.
-    pub async fn get(&self, key: Key) -> Result<Option<Val>> {
+    pub async fn get(&mut self, key: Key) -> Result<Option<Val>> {
         let version = self.version.load(Ordering::SeqCst);
         let callback = self.index.init_get(key).await;
         let response = self

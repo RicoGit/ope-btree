@@ -234,12 +234,13 @@ impl State {
 
 #[cfg(feature = "test")]
 pub mod test {
+    //! This module contains helpers for testing and debugging.
+
     use super::*;
     use bytes::Bytes;
     use common::noop_hasher::NoOpHasher;
     use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback};
     use protocol::RpcFuture;
-    use std::sync::Mutex;
 
     #[derive(Clone, Debug)]
     pub struct NoOpCrypt {}
@@ -264,14 +265,17 @@ pub mod test {
     /// Allows use non-cloneable PutState directly in Btree that requires clone.
     #[derive(Clone, Debug)]
     pub struct PutStateWrapper<'a> {
-        state: Arc<Mutex<PutState<'a, String, NoOpHasher, NoOpCrypt>>>,
+        state_ptr: *mut PutState<'a, String, NoOpHasher, NoOpCrypt>,
     }
 
     impl<'a> PutStateWrapper<'a> {
-        pub fn new(put_state: PutState<'a, String, NoOpHasher, NoOpCrypt>) -> Self {
-            PutStateWrapper {
-                state: Arc::new(Mutex::new(put_state)),
-            }
+        pub fn new(mut put_state: PutState<'a, String, NoOpHasher, NoOpCrypt>) -> Self {
+            let wrapper = PutStateWrapper {
+                // state: Arc::new(Mutex::new(put_state)),
+                state_ptr: &mut put_state,
+            };
+            std::mem::forget(put_state);
+            wrapper
         }
     }
 
@@ -281,10 +285,12 @@ pub mod test {
             keys: Vec<Bytes>,
             children_checksums: Vec<Bytes>,
         ) -> RpcFuture<usize> {
-            self.state
-                .lock()
-                .unwrap()
-                .next_child_idx(keys, children_checksums)
+            unsafe {
+                self.state_ptr
+                    .as_mut()
+                    .unwrap()
+                    .next_child_idx(keys, children_checksums)
+            }
         }
     }
 
@@ -294,7 +300,12 @@ pub mod test {
             keys: Vec<Bytes>,
             values_hashes: Vec<Bytes>,
         ) -> RpcFuture<'f, ClientPutDetails> {
-            self.state.lock().unwrap().put_details(keys, values_hashes)
+            unsafe {
+                self.state_ptr
+                    .as_mut()
+                    .unwrap()
+                    .put_details(keys, values_hashes)
+            }
         }
 
         fn verify_changes<'f>(
@@ -302,14 +313,16 @@ pub mod test {
             server_merkle_root: Bytes,
             was_splitting: bool,
         ) -> RpcFuture<'f, Bytes> {
-            self.state
-                .lock()
-                .unwrap()
-                .verify_changes(server_merkle_root, was_splitting)
+            unsafe {
+                self.state_ptr
+                    .as_mut()
+                    .unwrap()
+                    .verify_changes(server_merkle_root, was_splitting)
+            }
         }
 
         fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
-            self.state.lock().unwrap().changes_stored()
+            unsafe { self.state_ptr.as_mut().unwrap().changes_stored() }
         }
     }
 }
