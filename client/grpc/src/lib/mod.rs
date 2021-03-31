@@ -1,6 +1,7 @@
 use crate::lib::errors::status_to_protocol_err;
 use crate::lib::rpc::db_rpc_client::DbRpcClient;
 use client::ope_db::OpeDatabaseClient;
+use common::misc::ToBytes;
 use common::misc::ToVecBytes;
 use futures::FutureExt;
 use futures::{StreamExt, TryStreamExt};
@@ -18,6 +19,8 @@ pub mod errors;
 pub mod rpc {
     // Contains generated Grpc entities for ope Btree
     tonic::include_proto!("opebtree");
+
+    // todo define helper for working with generated Grpc
 }
 
 pub struct GrpcDbRpc {
@@ -54,7 +57,7 @@ impl GrpcDbRpc {
         // get server's requests stream
         let mut server_requests = self
             .client
-            .get(Request::new(ReceiverStream::new(client_replies_out)))  // see server DbRpcImpl::get
+            .get(Request::new(ReceiverStream::new(client_replies_out))) // see server DbRpcImpl::get
             .await
             .map_err(errors::status_to_protocol_err)?
             .into_inner();
@@ -67,6 +70,7 @@ impl GrpcDbRpc {
             .map_err(errors::status_to_protocol_err)?
         {
             match request {
+                // Receive asking next child
                 Some(rpc::GetCallback {
                     callback:
                         Some(rpc::get_callback::Callback::NextChildIdx(rpc::AskNextChildIndex {
@@ -89,6 +93,19 @@ impl GrpcDbRpc {
                         .send(next_child_msg)
                         .await
                         .map_err(errors::send_err_to_protocol_err)?;
+                }
+                // Receive Search result
+                Some(rpc::GetCallback {
+                    callback: Some(rpc::get_callback::Callback::Value(rpc::GetValue { value })),
+                }) => {
+                    let search_result = value.map(|vec| vec.bytes());
+                    log::info!("Server returns: {:?}", search_result);
+                    result = search_result;
+                }
+                // Receive end of stream
+                None => {
+                    log::debug!("Server close of the round trip.");
+                    break;
                 }
                 // todo impl all cases later
                 other => {

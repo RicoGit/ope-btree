@@ -24,7 +24,9 @@ tonic = "0.4.1"
 prost = "0.7"
 
 [build-dependencies]
+# building Grpc
 tonic-build = "0.4"
+prost-build ="0.7"
 
 [[bin]]
 name = "client-grpc"

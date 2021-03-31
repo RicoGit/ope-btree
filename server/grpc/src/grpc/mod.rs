@@ -165,20 +165,20 @@ where
                                 let search_result = match db.get(callback).await {
                                     Ok(value) => {
                                         log::info!("OpeDatabase respond with {:?}", value);
-                                        value.map(|val| {
-                                            rpc::get_callback::Callback::Value(rpc::GetValue {
-                                                value: val.to_vec(),
-                                            })
+                                        rpc::get_callback::Callback::Value(rpc::GetValue {
+                                            value: value.map(|bytes| bytes.to_vec()),
                                         })
                                     }
                                     Err(db_err) => {
                                         log::warn!("OpeDatabase respond with ERROR: {:?}", db_err);
-                                        Some(errors::db_err_to_grpc_err(db_err))
+                                        errors::db_err_to_grpc_err(db_err)
                                     }
                                 };
 
                                 server_requests_in
-                                    .send(Ok(rpc::GetCallback { callback: search_result }))
+                                    .send(Ok(rpc::GetCallback {
+                                        callback: Some(search_result),
+                                    }))
                                     .await;
                             });
 

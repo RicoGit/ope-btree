@@ -116,7 +116,7 @@ message ReplySubmitLeaf {
 }
 
 message GetValue {
-    bytes value = 1;
+    optional bytes value = 1;
 }
 
 message Error {
