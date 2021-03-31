@@ -17,44 +17,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
 pub mod errors;
-
-pub mod rpc {
-    // Contains generated Grpc entities for ope Btree
-    tonic::include_proto!("opebtree");
-
-    use bytes::Bytes;
-    use protocol::btree::SearchResult;
-
-    pub fn db_info_msg(dataset_id: Bytes, version: usize) -> GetCallbackReply {
-        GetCallbackReply {
-            reply: Some(get_callback_reply::Reply::DbInfo(DbInfo {
-                id: dataset_id.to_vec(),
-                version: version as i64,
-            })),
-        }
-    }
-
-    pub fn next_child_idx_msg(idx: usize) -> GetCallbackReply {
-        GetCallbackReply {
-            reply: Some(get_callback_reply::Reply::NextChildIdx(
-                ReplyNextChildIndex { index: idx as u32 },
-            )),
-        }
-    }
-
-    pub fn submit_leaf_msg(search_result: SearchResult) -> GetCallbackReply {
-        let result = match search_result.0 {
-            Err(idx) => reply_submit_leaf::SearchResult::InsertionPoint(idx as i32),
-            Ok(idx) => reply_submit_leaf::SearchResult::Found(idx as i32),
-        };
-
-        GetCallbackReply {
-            reply: Some(get_callback_reply::Reply::SubmitLeaf(ReplySubmitLeaf {
-                search_result: Some(result),
-            })),
-        }
-    }
-}
+pub mod rpc;
 
 pub struct GrpcDbRpc {
     client: DbRpcClient<tonic::transport::Channel>,
@@ -76,7 +39,7 @@ impl GrpcDbRpc {
 
         log::debug!("Send DbInfo message to server");
         client_replies
-            .send(rpc::db_info_msg(dataset_id, version))
+            .send(rpc::get::db_info_msg(dataset_id, version))
             .await
             .map_err(errors::send_err_to_protocol_err)?;
 
@@ -124,7 +87,7 @@ impl GrpcDbRpc {
 
                     log::debug!("Send ReplyNextChildIndex message to server: idx={:?}", idx);
                     client_replies
-                        .send(rpc::next_child_idx_msg(idx))
+                        .send(rpc::get::next_child_idx_msg(idx))
                         .await
                         .map_err(errors::send_err_to_protocol_err)?;
                 }
@@ -150,7 +113,7 @@ impl GrpcDbRpc {
                         search_result
                     );
                     client_replies
-                        .send(rpc::submit_leaf_msg(search_result))
+                        .send(rpc::get::submit_leaf_msg(search_result))
                         .await
                         .map_err(errors::send_err_to_protocol_err)?;
                 }
@@ -194,7 +157,16 @@ impl GrpcDbRpc {
         put_callback: Cb,
         encrypted_value: Bytes,
     ) -> Result<Option<Bytes>, ProtocolError> {
-        unimplemented!()
+        // client's replies
+        let (client_replies, client_replies_out) = tokio::sync::mpsc::channel(1);
+
+        log::debug!("Send DbInfo message to server");
+        client_replies
+            .send(rpc::put::db_info_msg(dataset_id, version))
+            .await
+            .map_err(errors::send_err_to_protocol_err)?;
+
+        todo!()
     }
 }
 

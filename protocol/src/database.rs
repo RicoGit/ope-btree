@@ -19,7 +19,6 @@ pub trait OpeDatabaseRpc {
         version: usize,
         search_callback: Cb,
     ) -> RpcFuture<'cb, Option<Bytes>>;
-    // todo consider remove 'cb at all
 
     /// Initiates 'Put' operation in remote OpeBTree.
     ///

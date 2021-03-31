@@ -112,7 +112,7 @@ pub trait PutCallback: BtreeCallback {
     /// # Arguments
     ///
     /// * `server_merkle_root` - New merkle root after inserting key/value
-    /// * `values_hashes` - 'True' if server performed tree rebalancing, 'False' otherwise
+    /// * `was_splitting` - 'True' if server performed tree rebalancing, 'False' otherwise
     ///
     /// # Return
     ///

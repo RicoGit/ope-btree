@@ -148,7 +148,7 @@ message AskVerifyChanges {
 }
 
 message ReplyVerifyChanges {
-    // Signature for concatenation of version and serverMerkleRoot
+    // Signed version + serverMerkleRoot
     bytes signature = 1;
 }
 
