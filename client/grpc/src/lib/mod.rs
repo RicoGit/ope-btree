@@ -1,5 +1,7 @@
 use crate::lib::errors::status_to_protocol_err;
 use crate::lib::rpc::db_rpc_client::DbRpcClient;
+use client::ope_btree::errors::BTreeClientError;
+use client::ope_btree::errors::BTreeClientError::ProtocolErr;
 use client::ope_db::OpeDatabaseClient;
 use common::misc::ToBytes;
 use common::misc::ToVecBytes;
@@ -17,10 +19,11 @@ use tonic::{Request, Response, Status, Streaming};
 pub mod errors;
 
 pub mod rpc {
-    use bytes::Bytes;
-    use protocol::btree::SearchResult;
     // Contains generated Grpc entities for ope Btree
     tonic::include_proto!("opebtree");
+
+    use bytes::Bytes;
+    use protocol::btree::SearchResult;
 
     pub fn db_info_msg(dataset_id: Bytes, version: usize) -> GetCallbackReply {
         GetCallbackReply {
@@ -86,7 +89,7 @@ impl GrpcDbRpc {
             .into_inner();
 
         log::debug!("Start receiving server requests");
-        let mut result = None;
+        let mut result = Ok(None);
         while let request = server_requests
             .try_next()
             .await
@@ -101,8 +104,9 @@ impl GrpcDbRpc {
                 }) => {
                     let search_result = value.map(|vec| vec.bytes());
                     log::info!("Receive found value: {:?}", search_result);
-                    result = search_result;
+                    result = Ok(search_result);
                 }
+
                 //
                 // receive NextChildIdx
                 //
@@ -124,6 +128,7 @@ impl GrpcDbRpc {
                         .await
                         .map_err(errors::send_err_to_protocol_err)?;
                 }
+
                 //
                 // receive SubmitLeaf
                 //
@@ -149,11 +154,18 @@ impl GrpcDbRpc {
                         .await
                         .map_err(errors::send_err_to_protocol_err)?;
                 }
+
                 //
                 // receive ServerError
                 //
-
-                // todo
+                Some(rpc::GetCallback {
+                    callback:
+                        Some(rpc::get_callback::Callback::ServerError(rpc::Error { code, description })),
+                }) => {
+                    result = Err(errors::protocol_error(code, description));
+                    log::debug!("Receive ServerError: {:?}", result);
+                    break;
+                }
 
                 //
                 // receive end of stream
@@ -162,6 +174,7 @@ impl GrpcDbRpc {
                     log::debug!("Receive end of stream: server close GET round trip");
                     break;
                 }
+
                 //
                 // receive unknown server request
                 //
@@ -171,7 +184,7 @@ impl GrpcDbRpc {
             }
         }
 
-        Ok(result)
+        result
     }
 }
 
