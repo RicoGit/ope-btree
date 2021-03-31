@@ -186,6 +186,16 @@ impl GrpcDbRpc {
 
         result
     }
+
+    async fn put<Cb: PutCallback>(
+        &self,
+        dataset_id: Bytes,
+        version: usize,
+        put_callback: Cb,
+        encrypted_value: Bytes,
+    ) -> Result<Option<Bytes>, ProtocolError> {
+        unimplemented!()
+    }
 }
 
 impl OpeDatabaseRpc for GrpcDbRpc {
@@ -200,13 +210,15 @@ impl OpeDatabaseRpc for GrpcDbRpc {
         fut.boxed::<'cb>()
     }
 
-    fn put<'f, Cb: PutCallback + 'f>(
-        &self,
+    fn put<'cb, 's: 'cb, Cb: 'cb + PutCallback + Send>(
+        &'s self,
         dataset_id: Bytes,
         version: usize,
         put_callback: Cb,
         encrypted_value: Bytes,
-    ) -> RpcFuture<'f, Option<Bytes>> {
-        unimplemented!()
+    ) -> RpcFuture<'cb, Option<Bytes>> {
+        log::debug!("OpeDatabaseRpc::put({:?},{:?})", dataset_id, version);
+        let fut = self.put(dataset_id, version, put_callback, encrypted_value);
+        fut.boxed::<'cb>()
     }
 }

@@ -13,6 +13,9 @@ pub fn status_to_protocol_err(status: Status) -> ProtocolError {
 }
 
 pub fn protocol_error(code: String, description: String) -> ProtocolError {
-    let msg = format!("Error from server: code: {:?}, description: {:?}", code, description);
+    let msg = format!(
+        "Error from server: code: {:?}, description: {:?}",
+        code, description
+    );
     ProtocolError::RpcErr { msg }
 }

@@ -29,13 +29,13 @@ pub trait OpeDatabaseRpc {
     /// `encrypted_value` Encrypted value.
     ///
     /// Returns old value if old value was overridden, None otherwise.
-    fn put<'f, Cb: PutCallback + 'f>(
-        &self,
+    fn put<'cb, 's: 'cb, Cb: 'cb + PutCallback + Send>(
+        &'s self,
         dataset_id: Bytes,
         version: usize,
         put_callback: Cb,
         encrypted_value: Bytes,
-    ) -> RpcFuture<'f, Option<Bytes>>;
+    ) -> RpcFuture<'cb, Option<Bytes>>;
 
     // todo add callback for remove operation
 }

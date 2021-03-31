@@ -199,13 +199,13 @@ impl OpeDatabaseRpc for TestDatabaseRpc {
         .boxed()
     }
 
-    fn put<'f, Cb: PutCallback + 'f>(
-        &self,
+    fn put<'cb, 's: 'cb, Cb: 'cb + PutCallback + Send>(
+        &'s self,
         _dataset_id: Bytes,
         version: usize,
         put_callback: Cb,
         encrypted_value: Bytes,
-    ) -> RpcFuture<'f, Option<Bytes>> {
+    ) -> RpcFuture<'cb, Option<Bytes>> {
         let db = self.db.clone();
         let cb = TestCb::put(Box::new(put_callback));
 
