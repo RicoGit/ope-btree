@@ -51,8 +51,9 @@ impl GrpcDbRpc {
             .map_err(errors::status_to_protocol_err)?
             .into_inner();
 
-        log::debug!("Start receiving server requests");
         let mut result = Ok(None);
+        
+        log::debug!("Start receiving server requests");
         while let request = server_requests
             .try_next()
             .await
@@ -151,10 +152,10 @@ impl GrpcDbRpc {
     }
 
     async fn put<Cb: PutCallback>(
-        &self,
+        &mut self,
         dataset_id: Bytes,
         version: usize,
-        put_callback: Cb,
+        mut put_callback: Cb,
         encrypted_value: Bytes,
     ) -> Result<Option<Bytes>, ProtocolError> {
         // client's replies
@@ -166,7 +167,159 @@ impl GrpcDbRpc {
             .await
             .map_err(errors::send_err_to_protocol_err)?;
 
-        todo!()
+        log::debug!("Get server's requests stream");
+        let mut server_requests = self
+            .client
+            .put(Request::new(ReceiverStream::new(client_replies_out))) // see server DbRpcImpl::get
+            .await
+            .map_err(errors::status_to_protocol_err)?
+            .into_inner();
+
+        let mut result = Ok(None);
+        
+        log::debug!("Start receiving server requests");
+        while let request = server_requests
+            .try_next()
+            .await
+            .map_err(errors::status_to_protocol_err)?
+        {
+            match request {
+                //
+                // receive Value
+                //
+                Some(rpc::PutCallback {
+                    callback: Some(rpc::put_callback::Callback::Value(rpc::PreviousValue { value })),
+                }) => {
+                    let search_result = value.map(|vec| vec.bytes());
+                    log::info!("Receive previous value: {:?}", search_result);
+                    result = Ok(search_result);
+
+                    log::debug!("Send PutValue message to server: enc_value={:?}", &encrypted_value);
+                    client_replies
+                        .send(rpc::put::value_msg(encrypted_value.clone()))
+                        .await
+                        .map_err(errors::send_err_to_protocol_err)?;
+                }
+
+                //
+                // receive NextChildIdx
+                //
+                Some(rpc::PutCallback {
+                    callback:
+                        Some(rpc::put_callback::Callback::NextChildIdx(rpc::AskNextChildIndex {
+                            keys,
+                            children_checksums,
+                        })),
+                }) => {
+                    log::debug!("Receive NextChildIdx");
+                    let idx = put_callback
+                        .next_child_idx(keys.into_bytes(), children_checksums.into_bytes())
+                        .await?;
+
+                    log::debug!("Send ReplyNextChildIndex message to server: idx={:?}", idx);
+                    client_replies
+                        .send(rpc::put::next_child_idx_msg(idx))
+                        .await
+                        .map_err(errors::send_err_to_protocol_err)?;
+                }
+
+                //
+                // receive PutDetails
+                //
+                Some(rpc::PutCallback {
+                    callback:
+                        Some(rpc::put_callback::Callback::PutDetails(rpc::AskPutDetails {
+                            keys,
+                            values_checksums,
+                        })),
+                }) => {
+                    log::debug!("Receive PutDetails");
+                    let details = put_callback
+                        .put_details(keys.into_bytes(), values_checksums.into_bytes())
+                        .await?;
+
+                    log::debug!(
+                        "Send ReplyPutDetails message to server: put_details={:?}",
+                        details
+                    );
+                    client_replies
+                        .send(rpc::put::put_details_msg(details))
+                        .await
+                        .map_err(errors::send_err_to_protocol_err)?;
+                }
+
+                //
+                // receive VerifyChanges
+                //
+                Some(rpc::PutCallback {
+                    callback:
+                        Some(rpc::put_callback::Callback::VerifyChanges(rpc::AskVerifyChanges {
+                            server_merkle_root,
+                            was_split,
+                        })),
+                }) => {
+                    log::debug!("Receive VerifyChanges");
+                    let m_root = put_callback
+                        .verify_changes(server_merkle_root.bytes(), was_split)
+                        .await?;
+
+                    log::debug!(
+                        "Send ReplyVerifyChanges message to server: m_root={:?}",
+                        m_root
+                    );
+                    client_replies
+                        .send(rpc::put::verify_changes_msg(m_root))
+                        .await
+                        .map_err(errors::send_err_to_protocol_err)?;
+                }
+
+                //
+                // receive ChangesStored
+                //
+                Some(rpc::PutCallback {
+                    callback:
+                        Some(rpc::put_callback::Callback::ChangesStored(rpc::AskChangesStored {})),
+                }) => {
+                    log::debug!("Receive ChangesStored");
+                    put_callback.changes_stored().await?;
+
+                    log::debug!("Send ReplyChangesStored message to server");
+                    client_replies
+                        .send(rpc::put::changes_stored_msg())
+                        .await
+                        .map_err(errors::send_err_to_protocol_err)?;
+                }
+
+                //
+                // receive ServerError
+                //
+                Some(rpc::PutCallback {
+                    callback:
+                        Some(rpc::put_callback::Callback::ServerError(rpc::Error { code, description })),
+                }) => {
+                    result = Err(errors::protocol_error(code, description));
+                    log::debug!("Receive ServerError: {:?}", result);
+                    break;
+                }
+
+                //
+                // receive end of stream
+                //
+                None => {
+                    log::debug!("Receive end of stream: server close PUT round trip");
+                    break;
+                }
+
+                //
+                // receive unknown server request
+                //
+                other => {
+                    log::warn!("Invalid server request: {:?}", other)
+                }
+            }
+        }
+
+        result
     }
 }
 
@@ -183,7 +336,7 @@ impl OpeDatabaseRpc for GrpcDbRpc {
     }
 
     fn put<'cb, 's: 'cb, Cb: 'cb + PutCallback + Send>(
-        &'s self,
+        &'s mut self,
         dataset_id: Bytes,
         version: usize,
         put_callback: Cb,

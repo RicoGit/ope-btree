@@ -66,7 +66,7 @@ where
     /// `value` The value associated with the specified key
     ///
     /// Returns old value if old value was overridden, None otherwise.
-    pub async fn put(&self, key: Key, val: Val) -> Result<Option<Val>> {
+    pub async fn put(&mut self, key: Key, val: Val) -> Result<Option<Val>> {
         let version = self.version.load(Ordering::SeqCst);
         let enc_value = self.val_crypt.encrypt(val)?;
         let value_hash = Hash::build::<Digest, _>(enc_value.clone());

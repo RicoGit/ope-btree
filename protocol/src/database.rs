@@ -29,7 +29,7 @@ pub trait OpeDatabaseRpc {
     ///
     /// Returns old value if old value was overridden, None otherwise.
     fn put<'cb, 's: 'cb, Cb: 'cb + PutCallback + Send>(
-        &'s self,
+        &'s mut self,
         dataset_id: Bytes,
         version: usize,
         put_callback: Cb,

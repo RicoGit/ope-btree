@@ -200,7 +200,7 @@ impl OpeDatabaseRpc for TestDatabaseRpc {
     }
 
     fn put<'cb, 's: 'cb, Cb: 'cb + PutCallback + Send>(
-        &'s self,
+        &'s mut self,
         _dataset_id: Bytes,
         version: usize,
         put_callback: Cb,
