@@ -199,7 +199,7 @@ where
     }
 
     /// Case when server confirmed changes persisted
-    fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
+    fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
         // change global client state with new merkle root
         log::debug!("changes_stored starts for state={:?}", self);
         async { Ok(()) }.boxed()

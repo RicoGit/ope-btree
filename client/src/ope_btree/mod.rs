@@ -322,7 +322,7 @@ pub mod test {
             }
         }
 
-        fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
+        fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
             unsafe { self.state_ptr.as_mut().unwrap().changes_stored() }
         }
     }

@@ -118,7 +118,7 @@ pub mod tests {
             async move { Ok(res) }.boxed()
         }
 
-        fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
+        fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
             async {
                 log::trace!("TestCallback.changes_stored: All changes stored");
                 Ok(())

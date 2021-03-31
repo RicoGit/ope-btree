@@ -40,7 +40,7 @@ async fn put_to_empty_db_test() {
 
     let (tx, _rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     let result = client.put(k(1), v(1)).await;
     assert_eq!(result.unwrap(), None);
@@ -94,7 +94,7 @@ async fn one_depth_tree_test() {
     let db = create_server(tx).await;
     let mut client = create_client(db);
 
-    let changes = put(4, &client, rx).await;
+    let changes = put(4, &mut client, rx).await;
     assert_eq!(changes, dc("[[k1][v1]][[k2][v2]][[k3][v3]][[k4][v4]]", 4));
 
     get(4, &mut client).await;
@@ -110,7 +110,7 @@ async fn two_depth_tree_test() {
     let mut client = create_client(db);
 
     let n = 10;
-    let changes = put(n, &client, rx).await;
+    let changes = put(n, &mut client, rx).await;
     // k1-k2-k6 - root
     // k1-k10-k2 | k3-k4 | k5-k6 | k7-k8-k9 - leaves
     assert_eq!(changes, dc("[k2][k4][k6][[[k1][v1]][[k10][v10]][[k2][v2]]][[[k3][v3]][[k4][v4]]][[[k5][v5]][[k6][v6]]][[[k7][v7]][[k8][v8]][[k9][v9]]]", n));
@@ -128,7 +128,7 @@ async fn three_depth_tree_test() {
     let mut client = create_client(db);
 
     let n = 20;
-    let changes = put(n, &client, rx).await;
+    let changes = put(n, &mut client, rx).await;
     assert_eq!(changes.new_version, n);
 
     get(n, &mut client).await
@@ -144,7 +144,7 @@ async fn five_depth_tree_test() {
     let mut client = create_client(db);
 
     let n = 200;
-    let changes = put(n, &client, rx).await;
+    let changes = put(n, &mut client, rx).await;
     assert_eq!(changes.new_version, n);
 
     get(n, &mut client).await
@@ -160,7 +160,7 @@ async fn five_depth_tree_reverse_test() {
     let mut client = create_client(db);
 
     let n = 200;
-    let changes = reverse_put(n, &client, rx).await;
+    let changes = reverse_put(n, &mut client, rx).await;
     assert_eq!(changes.new_version, n);
 
     reverse_get(n, &mut client).await
@@ -310,8 +310,8 @@ impl<Cb: PutCallback> PutCallback for TestCb<Cb> {
         }
     }
 
-    fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
-        unsafe { self.cb.as_ref().unwrap().changes_stored() }
+    fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
+        unsafe { self.cb.as_mut().unwrap().changes_stored() }
     }
 }
 
@@ -370,7 +370,7 @@ fn dc(hash: &str, version: usize) -> DatasetChanged {
 /// Puts n items and returns last MerkelRoot
 async fn put(
     n: usize,
-    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+    client: &mut OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
     mut rx: Receiver<DatasetChanged>,
 ) -> DatasetChanged {
     let mut m_root = None;
@@ -386,7 +386,7 @@ async fn put(
 /// Puts n items and returns last MerkelRoot
 async fn reverse_put(
     n: usize,
-    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+    client: &mut OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
     mut rx: Receiver<DatasetChanged>,
 ) -> DatasetChanged {
     let mut m_root = None;

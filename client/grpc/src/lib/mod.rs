@@ -52,7 +52,7 @@ impl GrpcDbRpc {
             .into_inner();
 
         let mut result = Ok(None);
-        
+
         log::debug!("Start receiving server requests");
         while let request = server_requests
             .try_next()
@@ -176,7 +176,7 @@ impl GrpcDbRpc {
             .into_inner();
 
         let mut result = Ok(None);
-        
+
         log::debug!("Start receiving server requests");
         while let request = server_requests
             .try_next()
@@ -194,7 +194,10 @@ impl GrpcDbRpc {
                     log::info!("Receive previous value: {:?}", search_result);
                     result = Ok(search_result);
 
-                    log::debug!("Send PutValue message to server: enc_value={:?}", &encrypted_value);
+                    log::debug!(
+                        "Send PutValue message to server: enc_value={:?}",
+                        &encrypted_value
+                    );
                     client_replies
                         .send(rpc::put::value_msg(encrypted_value.clone()))
                         .await

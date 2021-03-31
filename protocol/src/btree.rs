@@ -125,7 +125,7 @@ pub trait PutCallback: BtreeCallback {
     ) -> RpcFuture<'f, Bytes>;
 
     /// Server confirms that all changes was persisted.
-    fn changes_stored<'f>(&self) -> RpcFuture<'f, ()>;
+    fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()>;
 }
 
 // todo add callback for remove operation
