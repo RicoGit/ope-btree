@@ -17,10 +17,40 @@ use tonic::{Request, Response, Status, Streaming};
 pub mod errors;
 
 pub mod rpc {
+    use bytes::Bytes;
+    use protocol::btree::SearchResult;
     // Contains generated Grpc entities for ope Btree
     tonic::include_proto!("opebtree");
 
-    // todo define helper for working with generated Grpc
+    pub fn db_info_msg(dataset_id: Bytes, version: usize) -> GetCallbackReply {
+        GetCallbackReply {
+            reply: Some(get_callback_reply::Reply::DbInfo(DbInfo {
+                id: dataset_id.to_vec(),
+                version: version as i64,
+            })),
+        }
+    }
+
+    pub fn next_child_idx_msg(idx: usize) -> GetCallbackReply {
+        GetCallbackReply {
+            reply: Some(get_callback_reply::Reply::NextChildIdx(
+                ReplyNextChildIndex { index: idx as u32 },
+            )),
+        }
+    }
+
+    pub fn submit_leaf_msg(search_result: SearchResult) -> GetCallbackReply {
+        let result = match search_result.0 {
+            Err(idx) => reply_submit_leaf::SearchResult::InsertionPoint(idx as i32),
+            Ok(idx) => reply_submit_leaf::SearchResult::Found(idx as i32),
+        };
+
+        GetCallbackReply {
+            reply: Some(get_callback_reply::Reply::SubmitLeaf(ReplySubmitLeaf {
+                search_result: Some(result),
+            })),
+        }
+    }
 }
 
 pub struct GrpcDbRpc {
@@ -41,20 +71,13 @@ impl GrpcDbRpc {
         // client's replies
         let (client_replies, client_replies_out) = tokio::sync::mpsc::channel(1);
 
-        log::debug!("Send init Get message to server");
-        let db_info_msg = rpc::GetCallbackReply {
-            reply: Some(rpc::get_callback_reply::Reply::DbInfo(rpc::DbInfo {
-                id: dataset_id.to_vec(),
-                version: version as i64,
-            })),
-        };
-
+        log::debug!("Send DbInfo message to server");
         client_replies
-            .send(db_info_msg)
+            .send(rpc::db_info_msg(dataset_id, version))
             .await
             .map_err(errors::send_err_to_protocol_err)?;
 
-        // get server's requests stream
+        log::debug!("Get server's requests stream");
         let mut server_requests = self
             .client
             .get(Request::new(ReceiverStream::new(client_replies_out))) // see server DbRpcImpl::get
@@ -62,7 +85,7 @@ impl GrpcDbRpc {
             .map_err(errors::status_to_protocol_err)?
             .into_inner();
 
-        // receive server requests
+        log::debug!("Start receiving server requests");
         let mut result = None;
         while let request = server_requests
             .try_next()
@@ -70,7 +93,19 @@ impl GrpcDbRpc {
             .map_err(errors::status_to_protocol_err)?
         {
             match request {
-                // Receive asking next child
+                //
+                // receive GetValue
+                //
+                Some(rpc::GetCallback {
+                    callback: Some(rpc::get_callback::Callback::Value(rpc::GetValue { value })),
+                }) => {
+                    let search_result = value.map(|vec| vec.bytes());
+                    log::info!("Receive found value: {:?}", search_result);
+                    result = search_result;
+                }
+                //
+                // receive NextChildIdx
+                //
                 Some(rpc::GetCallback {
                     callback:
                         Some(rpc::get_callback::Callback::NextChildIdx(rpc::AskNextChildIndex {
@@ -78,39 +113,60 @@ impl GrpcDbRpc {
                             children_checksums,
                         })),
                 }) => {
+                    log::debug!("Receive NextChildIdx");
                     let idx = search_callback
                         .next_child_idx(keys.into_bytes(), children_checksums.into_bytes())
                         .await?;
 
-                    let next_child_msg = rpc::GetCallbackReply {
-                        reply: Some(rpc::get_callback_reply::Reply::NextChildIdx(
-                            rpc::ReplyNextChildIndex { index: idx as u32 },
-                        )),
-                    };
-
-                    // send init Get message to server
+                    log::debug!("Send ReplyNextChildIndex message to server: idx={:?}", idx);
                     client_replies
-                        .send(next_child_msg)
+                        .send(rpc::next_child_idx_msg(idx))
                         .await
                         .map_err(errors::send_err_to_protocol_err)?;
                 }
-                // Receive Search result
+                //
+                // receive SubmitLeaf
+                //
                 Some(rpc::GetCallback {
-                    callback: Some(rpc::get_callback::Callback::Value(rpc::GetValue { value })),
+                    callback:
+                        Some(rpc::get_callback::Callback::SubmitLeaf(rpc::AskSubmitLeaf {
+                            keys,
+                            values_checksums,
+                        })),
                 }) => {
-                    let search_result = value.map(|vec| vec.bytes());
-                    log::info!("Server returns: {:?}", search_result);
-                    result = search_result;
+                    log::info!("Receive SubmitLeaf result");
+
+                    let search_result = search_callback
+                        .submit_leaf(keys.into_bytes(), values_checksums.into_bytes())
+                        .await?;
+
+                    log::debug!(
+                        "Send ReplyNextChildIndex message to server: search_result={:?}",
+                        search_result
+                    );
+                    client_replies
+                        .send(rpc::submit_leaf_msg(search_result))
+                        .await
+                        .map_err(errors::send_err_to_protocol_err)?;
                 }
-                // Receive end of stream
+                //
+                // receive ServerError
+                //
+
+                // todo
+
+                //
+                // receive end of stream
+                //
                 None => {
-                    log::debug!("Server close of the round trip.");
+                    log::debug!("Receive end of stream: server close GET round trip");
                     break;
                 }
-                // todo impl all cases later
+                //
+                // receive unknown server request
+                //
                 other => {
-                    // todo Some(GetCallback { callback: None }) comes when Db return None, should we describe it more clearly?
-                    log::warn!("Invalid server request: {:?}", other) // todo impl Debug for GetCallback
+                    log::warn!("Invalid server request: {:?}", other)
                 }
             }
         }

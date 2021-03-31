@@ -1,3 +1,5 @@
+//! Simple client just create Db and get and put few values (for debug purpose)
+
 use crate::lib::GrpcDbRpc;
 use bytes::Bytes;
 use client::ope_btree::test::NoOpCrypt;
@@ -19,8 +21,6 @@ mod lib;
 async fn main() -> Result<(), Box<dyn Error + 'static>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
 
-    // simple client just create Db and get and put few values (for debug purpose)
-
     let addr = "http://[::1]:7777";
     let mut client = DbRpcClient::connect(addr).await?;
     let rpc = lib::GrpcDbRpc::new(client);
@@ -41,6 +41,12 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
     let k1 = "k1".to_string();
     let res1 = db_client.get(k1).await?;
     log::info!("Response: {:?}", res1);
+
+    // log::info!("Send PUT k1 v1");
+    // let k1 = "k1".to_string();
+    // let v1 = "v1".to_string();
+    // let res1 = db_client.put(k1, v1).await?;
+    // log::info!("Response: {:?}", res1);
 
     Ok(())
 }
