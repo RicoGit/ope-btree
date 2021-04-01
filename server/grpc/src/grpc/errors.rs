@@ -21,3 +21,13 @@ pub fn send_err_to_protocol_err<T>(err: SendError<T>) -> ProtocolError {
     let msg = format!("Sending to client error: {}", err);
     ProtocolError::RpcErr { msg }
 }
+
+pub fn unexpected_msg_err(expected: &str, actually: Option<rpc::PutCallbackReply>) -> Status {
+    let msg = format!(
+        "Wrong message order from client, expected {:?}, actually: {:?}",
+        expected,
+        actually
+    );
+    log::warn!("{}", msg);
+    Status::invalid_argument(msg.to_string())
+}

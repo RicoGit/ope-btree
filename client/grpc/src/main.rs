@@ -39,14 +39,22 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
 
     log::info!("Send GET k1");
     let k1 = "k1".to_string();
-    let res1 = db_client.get(k1).await?;
-    log::info!("Response: {:?}", res1);
+    let res = db_client.get(k1).await?;
+    log::info!("Response: {:?}", res);
+    assert_eq!(None, res);
 
-    // log::info!("Send PUT k1 v1");
-    // let k1 = "k1".to_string();
-    // let v1 = "v1".to_string();
-    // let res1 = db_client.put(k1, v1).await?;
-    // log::info!("Response: {:?}", res1);
+    log::info!("Send PUT k1 v1");
+    let k1 = "k1".to_string();
+    let v1 = "v1".to_string();
+    let res = db_client.put(k1, v1.clone()).await?;
+    log::info!("Response: {:?}", res);
+    assert_eq!(None, res);
+
+    log::info!("Send GET k1");
+    let k1 = "k1".to_string();
+    let res = db_client.get(k1).await?;
+    log::info!("Response: {:?}", res);
+    assert_eq!(Some(v1), res);
 
     Ok(())
 }

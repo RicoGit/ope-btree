@@ -159,7 +159,7 @@ impl GrpcDbRpc {
         encrypted_value: Bytes,
     ) -> Result<Option<Bytes>, ProtocolError> {
         // client's replies
-        let (client_replies, client_replies_out) = tokio::sync::mpsc::channel(1);
+        let (client_replies, client_replies_out) = tokio::sync::mpsc::channel(2);
 
         log::debug!("Send DbInfo message to server as first msg");
         client_replies
