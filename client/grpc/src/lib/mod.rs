@@ -161,9 +161,15 @@ impl GrpcDbRpc {
         // client's replies
         let (client_replies, client_replies_out) = tokio::sync::mpsc::channel(1);
 
-        log::debug!("Send DbInfo message to server");
+        log::debug!("Send DbInfo message to server as first msg");
         client_replies
             .send(rpc::put::db_info_msg(dataset_id, version))
+            .await
+            .map_err(errors::send_err_to_protocol_err)?;
+
+        log::debug!("Send encrypted message PutValue to server as second msg");
+        client_replies
+            .send(rpc::put::value_msg(encrypted_value))
             .await
             .map_err(errors::send_err_to_protocol_err)?;
 
@@ -193,15 +199,6 @@ impl GrpcDbRpc {
                     let search_result = value.map(|vec| vec.bytes());
                     log::info!("Receive previous value: {:?}", search_result);
                     result = Ok(search_result);
-
-                    log::debug!(
-                        "Send PutValue message to server: enc_value={:?}",
-                        &encrypted_value
-                    );
-                    client_replies
-                        .send(rpc::put::value_msg(encrypted_value.clone()))
-                        .await
-                        .map_err(errors::send_err_to_protocol_err)?;
                 }
 
                 //
