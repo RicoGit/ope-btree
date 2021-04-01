@@ -80,11 +80,11 @@ pub mod tests {
     }
 
     impl SearchCallback for TestCallback {
-        fn submit_leaf<'f>(
+        fn submit_leaf(
             &mut self,
             _keys: Vec<Bytes>,
             _values_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, SearchResult> {
+        ) -> RpcFuture<SearchResult> {
             let res = self
                 .submit_leaf_vec
                 .pop()

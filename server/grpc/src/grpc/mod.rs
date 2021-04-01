@@ -1,8 +1,5 @@
-pub mod rpc {
-    // Contains generated Grpc entities for ope Btree
-    tonic::include_proto!("opebtree");
-}
 pub mod errors;
+pub mod rpc;
 
 use kvstore_api::kvstore::KVStore;
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
@@ -13,6 +10,7 @@ use rpc::db_rpc_server::DbRpc;
 use rpc::get_callback_reply::Reply;
 use rpc::DbInfo;
 
+use crate::grpc::rpc::get::value_msg;
 use common::misc::{FromVecBytes, ToBytes, ToVecBytes};
 use futures::FutureExt;
 use log::*;
@@ -46,6 +44,7 @@ pub async fn new_in_memory_db<D: Digest + 'static>(
     DbRpcImpl { db: Arc::new(db) }
 }
 
+// todo move to separate module
 struct SearchCb {
     /// Server sends requests to this channel
     server_requests: Sender<Result<rpc::GetCallback, Status>>,
@@ -65,35 +64,28 @@ impl BtreeCallback for SearchCb {
             children_checksums
         );
 
-        // create server request
-        let request = rpc::GetCallback {
-            callback: Some(rpc::get_callback::Callback::NextChildIdx(
-                rpc::AskNextChildIndex {
-                    keys: keys.into_byte_vec(),
-                    children_checksums: children_checksums.into_byte_vec(),
-                },
-            )),
-        };
-
         let server_requests = self.server_requests.clone();
 
         let future = async move {
-            // send request to client
-            if let Err(err) = server_requests.send(Ok(request)).await {
-                return Err(errors::send_err_to_protocol_err(err));
-            }
+            log::debug!("Send AskNextChildIndex message to client");
+            server_requests
+                .send(Ok(rpc::get::next_child_idx_msg(keys, children_checksums)))
+                .await
+                .map_err(errors::send_err_to_protocol_err)?;
 
             // wait response from client
             let response = self.client_replies.try_next().await;
+
             if let Ok(Some(rpc::GetCallbackReply {
                 reply: Some(Reply::NextChildIdx(rpc::ReplyNextChildIndex { index })),
             })) = response
             {
+                log::debug!("Receive NextChildIdx({:?})", index);
+
                 Ok(index as usize)
             } else {
-                let err = response.err();
-                log::warn!("Unexpected client's reply: {:?}", &err);
-                Err(errors::opt_status_to_protocol_err(err))
+                log::warn!("Expected ReplyNextChildIndex, actually: {:?}", &response);
+                Err(errors::opt_status_to_protocol_err(response.err()))
             }
         };
 
@@ -102,17 +94,53 @@ impl BtreeCallback for SearchCb {
 }
 
 impl SearchCallback for SearchCb {
-    fn submit_leaf<'f>(
+    fn submit_leaf(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, SearchResult> {
+    ) -> RpcFuture<SearchResult> {
         log::debug!(
             "SearchCallback::submit_leaf({:?},{:?})",
             keys,
             values_hashes
         );
-        unimplemented!()
+
+        let server_requests = self.server_requests.clone();
+
+        let future = async move {
+            log::debug!("Send AskSubmitLeaf message to client");
+            server_requests
+                .send(Ok(rpc::get::submit_leaf_msg(keys, values_hashes)))
+                .await
+                .map_err(errors::send_err_to_protocol_err)?;
+
+            // wait response from client
+            let response = self.client_replies.try_next().await;
+
+            if let Ok(Some(rpc::GetCallbackReply {
+                reply:
+                    Some(Reply::SubmitLeaf(rpc::ReplySubmitLeaf {
+                        search_result: Some(search_result),
+                    })),
+            })) = response
+            {
+                log::debug!("Receive SubmitLeaf({:?})", search_result);
+
+                match search_result {
+                    rpc::reply_submit_leaf::SearchResult::Found(idx) => {
+                        Ok(SearchResult(Result::Ok(idx as usize)))
+                    }
+                    rpc::reply_submit_leaf::SearchResult::InsertionPoint(idx) => {
+                        Ok(SearchResult(Result::Err(idx as usize)))
+                    }
+                }
+            } else {
+                log::warn!("Expected ReplySubmitLeaf, actually: {:?}", &response);
+                Err(errors::opt_status_to_protocol_err(response.err()))
+            }
+        };
+
+        future.boxed()
     }
 }
 
@@ -134,9 +162,8 @@ where
 
         let (result_in, result_out) = tokio::sync::oneshot::channel();
 
-        // wait first message with DnInfo
+        // waiting first message with DnInfo
         let mut client_replies = request.into_inner();
-
         match client_replies.next().await {
             Some(client_reply) => {
                 if let Err(status) = client_reply {
@@ -145,16 +172,16 @@ where
                 } else {
                     match client_reply.unwrap().reply {
                         Some(Reply::DbInfo(DbInfo { id, version })) => {
-                            log::debug!("Server received DbInfo({:?},{:?})", id, version);
+                            log::debug!("Server receive DbInfo({:?},{:?})", id, version);
 
                             // get specified Database with required version
                             // todo implement, only one db is supported now
 
-                            // open stream for server requests
+                            log::debug!("Open stream for server requests");
                             let (server_requests_in, server_requests_out) =
                                 tokio::sync::mpsc::channel(1);
 
-                            // starting a client-server round trip
+                            log::debug!("Starting a client-server round trip");
                             let db = self.db.clone();
                             tokio::spawn(async move {
                                 let callback = SearchCb {
@@ -164,40 +191,45 @@ where
 
                                 let search_result = match db.get(callback).await {
                                     Ok(value) => {
-                                        log::info!("OpeDatabase respond with {:?}", value);
-                                        rpc::get_callback::Callback::Value(rpc::GetValue {
-                                            value: value.map(|bytes| bytes.to_vec()),
-                                        })
+                                        log::info!("OpeDatabase found value: {:?}", value);
+                                        rpc::get::value_msg(value)
                                     }
                                     Err(db_err) => {
                                         log::warn!("OpeDatabase respond with ERROR: {:?}", db_err);
-                                        errors::db_err_to_grpc_err(db_err)
+                                        rpc::get::server_error_msg(db_err)
                                     }
                                 };
 
-                                server_requests_in
-                                    .send(Ok(rpc::GetCallback {
-                                        callback: Some(search_result),
-                                    }))
-                                    .await;
+                                server_requests_in.send(Ok(search_result)).await;
                             });
 
-                            // return server request stream
+                            log::debug!("Return server request stream");
                             let stream: Self::GetStream =
                                 Box::pin(ReceiverStream::new(server_requests_out));
+
                             result_in.send(Ok(Response::new(stream)));
                         }
-                        _ => {
-                            let msg = "Empty reply from client";
+
+                        //
+                        // unexpected client msg
+                        //
+                        unexpected => {
+                            let msg = format!(
+                                "Wrong message order from client, expected DbInfo, actually: {:?}",
+                                unexpected
+                            );
                             log::warn!("{}", msg);
                             result_in.send(Err(Status::invalid_argument(msg.to_string())));
                         }
                     }
                 }
             }
+
+            //
+            // receive end of stream
+            //
             None => {
-                log::warn!("Client reply is None");
-                todo!()
+                log::warn!("Receive end of stream: client close GET round trip");
             }
         };
 

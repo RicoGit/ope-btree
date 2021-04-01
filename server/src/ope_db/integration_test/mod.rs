@@ -279,11 +279,11 @@ impl<Cb: BtreeCallback> BtreeCallback for TestCb<Cb> {
 }
 
 impl<Cb: SearchCallback> SearchCallback for TestCb<Cb> {
-    fn submit_leaf<'f>(
+    fn submit_leaf(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, SearchResult> {
+    ) -> RpcFuture<SearchResult> {
         unsafe { self.cb.as_mut().unwrap().submit_leaf(keys, values_hashes) }
     }
 }

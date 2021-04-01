@@ -56,11 +56,11 @@ pub trait SearchCallback: BtreeCallback {
     /// A result of searching client key in a current branch keys.
     /// Returns Err(idx) if key was found, Ok(idx) otherwise
     ///
-    fn submit_leaf<'f>(
+    fn submit_leaf(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, SearchResult>;
+    ) -> RpcFuture<SearchResult>;
 }
 
 /// A structure for holding all client details needed for inserting a key and a
