@@ -309,11 +309,11 @@ pub mod test {
             }
         }
 
-        fn verify_changes<'f>(
+        fn verify_changes(
             &mut self,
             server_merkle_root: Bytes,
             was_splitting: bool,
-        ) -> RpcFuture<'f, Bytes> {
+        ) -> RpcFuture<Bytes> {
             unsafe {
                 self.state_ptr
                     .as_mut()
@@ -322,7 +322,7 @@ pub mod test {
             }
         }
 
-        fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
+        fn changes_stored(&mut self) -> RpcFuture<()> {
             unsafe { self.state_ptr.as_mut().unwrap().changes_stored() }
         }
     }

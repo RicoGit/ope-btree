@@ -106,11 +106,11 @@ pub mod tests {
             async move { Ok(res) }.boxed()
         }
 
-        fn verify_changes<'f>(
+        fn verify_changes(
             &mut self,
             _server_merkle_root: Bytes,
             _was_splitting: bool,
-        ) -> RpcFuture<'f, Bytes> {
+        ) -> RpcFuture<Bytes> {
             let res = self
                 .verify_changes_vec
                 .pop()
@@ -118,7 +118,7 @@ pub mod tests {
             async move { Ok(res) }.boxed()
         }
 
-        fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
+        fn changes_stored(&mut self) -> RpcFuture<()> {
             async {
                 log::trace!("TestCallback.changes_stored: All changes stored");
                 Ok(())

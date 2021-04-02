@@ -132,15 +132,74 @@ impl PutCallback for PutCbImpl {
         future.boxed()
     }
 
-    fn verify_changes<'f>(
+    fn verify_changes(
         &mut self,
         server_merkle_root: Bytes,
         was_splitting: bool,
-    ) -> RpcFuture<'f, Bytes> {
-        unimplemented!()
+    ) -> RpcFuture<Bytes> {
+        log::debug!(
+            "PutCbImpl::verify_changes(root={:?},was_splitting{:?})",
+            server_merkle_root,
+            was_splitting
+        );
+
+        let server_requests = self.server_requests.clone();
+
+        let future = async move {
+            log::debug!("Send AskVerifyChanges message to client");
+            server_requests
+                .send(Ok(rpc::put::verify_changes_msg(
+                    server_merkle_root,
+                    was_splitting,
+                )))
+                .await
+                .map_err(errors::send_err_to_protocol_err)?;
+
+            // wait response from client
+            let response = self.client_replies.try_next().await;
+
+            if let Ok(Some(rpc::PutCallbackReply {
+                reply: Some(PutReply::VerifyChanges(rpc::ReplyVerifyChanges { signature })),
+            })) = response
+            {
+                log::debug!("Receive ReplyVerifyChanges({:?})", signature);
+                Ok(signature.bytes())
+            } else {
+                log::warn!("Expected ReplyVerifyChanges, actually: {:?}", &response);
+                Err(errors::opt_status_to_protocol_err(response.err()))
+            }
+        };
+
+        future.boxed()
     }
 
-    fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
-        unimplemented!()
+    fn changes_stored(&mut self) -> RpcFuture<()> {
+        log::debug!("PutCbImpl::changes_stored)",);
+
+        let server_requests = self.server_requests.clone();
+
+        let future = async move {
+            log::debug!("Send AskVerifyChanges message to client");
+            server_requests
+                .send(Ok(rpc::put::changes_stored_msg()))
+                .await
+                .map_err(errors::send_err_to_protocol_err)?;
+
+            // wait response from client
+            let response = self.client_replies.try_next().await;
+
+            if let Ok(Some(rpc::PutCallbackReply {
+                reply: Some(PutReply::ChangesStored(rpc::ReplyChangesStored {})),
+            })) = response
+            {
+                log::debug!("Receive ReplyVerifyChanges()");
+                Ok(())
+            } else {
+                log::warn!("Expected ReplyVerifyChanges, actually: {:?}", &response);
+                Err(errors::opt_status_to_protocol_err(response.err()))
+            }
+        };
+
+        future.boxed()
     }
 }

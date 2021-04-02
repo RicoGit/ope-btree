@@ -118,14 +118,14 @@ pub trait PutCallback: BtreeCallback {
     ///
     /// Returns signed by client new merkle root as bytes.
     ///
-    fn verify_changes<'f>(
+    fn verify_changes(
         &mut self,
         server_merkle_root: Bytes,
         was_splitting: bool,
-    ) -> RpcFuture<'f, Bytes>;
+    ) -> RpcFuture<Bytes>;
 
     /// Server confirms that all changes was persisted.
-    fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()>;
+    fn changes_stored(&mut self) -> RpcFuture<()>;
 }
 
 // todo add callback for remove operation

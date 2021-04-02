@@ -297,11 +297,11 @@ impl<Cb: PutCallback> PutCallback for TestCb<Cb> {
         unsafe { self.cb.as_mut().unwrap().put_details(keys, values_hashes) }
     }
 
-    fn verify_changes<'f>(
+    fn verify_changes(
         &mut self,
         server_merkle_root: Bytes,
         was_splitting: bool,
-    ) -> RpcFuture<'f, Bytes> {
+    ) -> RpcFuture<Bytes> {
         unsafe {
             self.cb
                 .as_mut()
@@ -310,7 +310,7 @@ impl<Cb: PutCallback> PutCallback for TestCb<Cb> {
         }
     }
 
-    fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
+    fn changes_stored(&mut self) -> RpcFuture<()> {
         unsafe { self.cb.as_mut().unwrap().changes_stored() }
     }
 }

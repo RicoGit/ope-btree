@@ -156,11 +156,7 @@ where
     }
 
     /// Case when server asks verify made changes
-    fn verify_changes<'f>(
-        &mut self,
-        server_merkle_root: Bytes,
-        was_split: bool,
-    ) -> RpcFuture<'f, Bytes> {
+    fn verify_changes(&mut self, server_merkle_root: Bytes, was_split: bool) -> RpcFuture<Bytes> {
         log::debug!(
             "verify_changes starts for {:?}, server_merkle_root:{:?}, was_split:{:?}",
             self,
@@ -199,7 +195,7 @@ where
     }
 
     /// Case when server confirmed changes persisted
-    fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
+    fn changes_stored(&mut self) -> RpcFuture<()> {
         // change global client state with new merkle root
         log::debug!("changes_stored starts for state={:?}", self);
         async { Ok(()) }.boxed()
