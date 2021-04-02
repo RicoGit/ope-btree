@@ -296,11 +296,11 @@ pub mod test {
     }
 
     impl<'a> PutCallback for PutStateWrapper<'a> {
-        fn put_details<'f>(
+        fn put_details(
             &mut self,
             keys: Vec<Bytes>,
             values_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, ClientPutDetails> {
+        ) -> RpcFuture<ClientPutDetails> {
             unsafe {
                 self.state_ptr
                     .as_mut()

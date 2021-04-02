@@ -289,11 +289,11 @@ impl<Cb: SearchCallback> SearchCallback for TestCb<Cb> {
 }
 
 impl<Cb: PutCallback> PutCallback for TestCb<Cb> {
-    fn put_details<'f>(
+    fn put_details(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, ClientPutDetails> {
+    ) -> RpcFuture<ClientPutDetails> {
         unsafe { self.cb.as_mut().unwrap().put_details(keys, values_hashes) }
     }
 

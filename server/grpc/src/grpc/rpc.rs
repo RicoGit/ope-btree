@@ -46,6 +46,7 @@ pub mod get {
 
 pub mod put {
     use super::*;
+    use protocol::btree::SearchResult;
 
     pub fn value_msg(value: Option<Bytes>) -> PutCallback {
         PutCallback {
@@ -94,6 +95,13 @@ pub mod put {
                 code: err.to_string(),
                 description: format!("{:?}", err),
             })),
+        }
+    }
+
+    pub fn search_result(search_result: Option<reply_put_details::SearchResult>) -> SearchResult {
+        match search_result.expect("Unexpected search result shouldn't be None") {
+            reply_put_details::SearchResult::InsertionPoint(idx) => SearchResult(Err(idx as usize)),
+            reply_put_details::SearchResult::Found(idx) => SearchResult(Ok(idx as usize)),
         }
     }
 }

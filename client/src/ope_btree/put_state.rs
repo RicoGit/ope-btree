@@ -109,11 +109,11 @@ where
     Crypt: Decryptor<PlainData = Key> + Encryptor<PlainData = Key>,
 {
     /// Case when server returns founded leaf
-    fn put_details<'f>(
+    fn put_details(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, ClientPutDetails> {
+    ) -> RpcFuture<ClientPutDetails> {
         log::debug!(
             "put_details starts for {:?}, keys:{:?}, values_hashes:{:?}",
             self,

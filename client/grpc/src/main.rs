@@ -50,11 +50,11 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
     log::info!("Response: {:?}", res);
     assert_eq!(None, res);
 
-    log::info!("Send GET k1");
-    let k1 = "k1".to_string();
-    let res = db_client.get(k1).await?;
-    log::info!("Response: {:?}", res);
-    assert_eq!(Some(v1), res);
+    // log::info!("Send GET k1");
+    // let k1 = "k1".to_string();
+    // let res = db_client.get(k1).await?;
+    // log::info!("Response: {:?}", res);
+    // assert_eq!(Some(v1), res);
 
     Ok(())
 }

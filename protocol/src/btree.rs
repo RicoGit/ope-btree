@@ -101,11 +101,11 @@ pub trait PutCallback: BtreeCallback {
     ///
     /// Details from client needed for inserting a key and a value to the BTree.
     ///
-    fn put_details<'f>(
+    fn put_details(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, ClientPutDetails>;
+    ) -> RpcFuture<ClientPutDetails>;
 
     /// Server sends a new merkle root to a client for approve made changes.
     ///

@@ -94,11 +94,11 @@ pub mod tests {
     }
 
     impl PutCallback for TestCallback {
-        fn put_details<'f>(
+        fn put_details(
             &mut self,
             _keys: Vec<Bytes>,
             _values_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, ClientPutDetails> {
+        ) -> RpcFuture<ClientPutDetails> {
             let res = self
                 .put_details_vec
                 .pop()

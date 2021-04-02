@@ -28,6 +28,9 @@ use tokio_stream::StreamExt;
 use tonic::codegen::Stream;
 use tonic::{Request, Response, Status, Streaming};
 
+mod get_cb;
+mod put_cb;
+
 pub struct DbRpcImpl<NS, VS, D>
 where
     NS: KVStore<Vec<u8>, Vec<u8>>,
@@ -43,179 +46,6 @@ pub async fn new_in_memory_db<D: Digest + 'static>(
     let db = server::ope_db::new_in_memory_db(conf, update_channel);
     db.init().await.expect("Db initialization is failed");
     DbRpcImpl { db: Arc::new(db) }
-}
-
-struct GetCbImpl {
-    /// Server sends requests to this channel
-    server_requests: Sender<Result<rpc::GetCallback, Status>>,
-    /// Server receives client responses from this stream
-    client_replies: Streaming<rpc::GetCallbackReply>,
-}
-
-impl BtreeCallback for GetCbImpl {
-    fn next_child_idx(
-        &mut self,
-        keys: Vec<Bytes>,
-        children_checksums: Vec<Bytes>,
-    ) -> RpcFuture<usize> {
-        log::debug!(
-            "GetCbImpl::next_child_idx({:?},{:?})",
-            keys,
-            children_checksums
-        );
-
-        let server_requests = self.server_requests.clone();
-
-        let future = async move {
-            log::debug!("Send AskNextChildIndex message to client");
-            server_requests
-                .send(Ok(rpc::get::next_child_idx_msg(keys, children_checksums)))
-                .await
-                .map_err(errors::send_err_to_protocol_err)?;
-
-            // wait response from client
-            let response = self.client_replies.try_next().await;
-
-            if let Ok(Some(rpc::GetCallbackReply {
-                reply: Some(GetReply::NextChildIdx(rpc::ReplyNextChildIndex { index })),
-            })) = response
-            {
-                log::debug!("Receive NextChildIdx({:?})", index);
-
-                Ok(index as usize)
-            } else {
-                log::warn!("Expected ReplyNextChildIndex, actually: {:?}", &response);
-                Err(errors::opt_status_to_protocol_err(response.err()))
-            }
-        };
-
-        future.boxed()
-    }
-}
-
-impl SearchCallback for GetCbImpl {
-    fn submit_leaf(
-        &mut self,
-        keys: Vec<Bytes>,
-        values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<SearchResult> {
-        log::debug!("GetCbImpl::submit_leaf({:?},{:?})", keys, values_hashes);
-
-        let server_requests = self.server_requests.clone();
-
-        let future = async move {
-            log::debug!("Send AskSubmitLeaf message to client");
-            server_requests
-                .send(Ok(rpc::get::submit_leaf_msg(keys, values_hashes)))
-                .await
-                .map_err(errors::send_err_to_protocol_err)?;
-
-            // wait response from client
-            let response = self.client_replies.try_next().await;
-
-            if let Ok(Some(rpc::GetCallbackReply {
-                reply:
-                    Some(GetReply::SubmitLeaf(rpc::ReplySubmitLeaf {
-                        search_result: Some(search_result),
-                    })),
-            })) = response
-            {
-                log::debug!("Receive SubmitLeaf({:?})", search_result);
-
-                match search_result {
-                    rpc::reply_submit_leaf::SearchResult::Found(idx) => {
-                        Ok(SearchResult(Result::Ok(idx as usize)))
-                    }
-                    rpc::reply_submit_leaf::SearchResult::InsertionPoint(idx) => {
-                        Ok(SearchResult(Result::Err(idx as usize)))
-                    }
-                }
-            } else {
-                log::warn!("Expected ReplySubmitLeaf, actually: {:?}", &response);
-                Err(errors::opt_status_to_protocol_err(response.err()))
-            }
-        };
-
-        future.boxed()
-    }
-}
-
-// #[derive(Clone)]
-struct PutCbImpl {
-    /// Server sends requests to this channel
-    server_requests: Sender<Result<rpc::PutCallback, Status>>,
-    /// Server receives client responses from this stream
-    client_replies: Streaming<rpc::PutCallbackReply>,
-}
-
-// todo remove later, do impl Clone for Cmd instead
-impl Clone for PutCbImpl {
-    fn clone(&self) -> Self {
-        unimplemented!("Impl Clone for Cmd")
-    }
-}
-
-impl BtreeCallback for PutCbImpl {
-    fn next_child_idx(
-        &mut self,
-        keys: Vec<Bytes>,
-        children_checksums: Vec<Bytes>,
-    ) -> RpcFuture<usize> {
-        log::debug!(
-            "PutCbImpl::next_child_idx({:?},{:?})",
-            keys,
-            children_checksums
-        );
-
-        let server_requests = self.server_requests.clone();
-
-        let future = async move {
-            log::debug!("Send AskNextChildIndex message to client");
-            server_requests
-                .send(Ok(rpc::put::next_child_idx_msg(keys, children_checksums)))
-                .await
-                .map_err(errors::send_err_to_protocol_err)?;
-
-            // wait response from client
-            let response = self.client_replies.try_next().await;
-
-            if let Ok(Some(rpc::PutCallbackReply {
-                reply: Some(PutReply::NextChildIdx(rpc::ReplyNextChildIndex { index })),
-            })) = response
-            {
-                log::debug!("Receive NextChildIdx({:?})", index);
-
-                Ok(index as usize)
-            } else {
-                log::warn!("Expected ReplyNextChildIndex, actually: {:?}", &response);
-                Err(errors::opt_status_to_protocol_err(response.err()))
-            }
-        };
-
-        future.boxed()
-    }
-}
-
-impl PutCallback for PutCbImpl {
-    fn put_details<'f>(
-        &mut self,
-        keys: Vec<Bytes>,
-        values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, ClientPutDetails> {
-        unimplemented!()
-    }
-
-    fn verify_changes<'f>(
-        &mut self,
-        server_merkle_root: Bytes,
-        was_splitting: bool,
-    ) -> RpcFuture<'f, Bytes> {
-        unimplemented!()
-    }
-
-    fn changes_stored<'f>(&mut self) -> RpcFuture<'f, ()> {
-        unimplemented!()
-    }
 }
 
 #[tonic::async_trait]
@@ -257,7 +87,7 @@ where
                             log::debug!("Starting a client-server round trip");
                             let db = self.db.clone();
                             tokio::spawn(async move {
-                                let callback = GetCbImpl {
+                                let callback = get_cb::GetCbImpl {
                                     server_requests: server_requests_in.clone(),
                                     client_replies,
                                 };
@@ -349,7 +179,7 @@ where
                         log::debug!("Starting a client-server round trip in parallel");
                         let db = self.db.clone();
                         tokio::spawn(async move {
-                            let callback = PutCbImpl {
+                            let callback = put_cb::PutCbImpl {
                                 server_requests: server_requests_in.clone(),
                                 client_replies,
                             };
