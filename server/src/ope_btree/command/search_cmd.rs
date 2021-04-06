@@ -1,8 +1,8 @@
 use crate::ope_btree::command::Cmd;
 use crate::ope_btree::command::Result;
-use crate::ope_btree::internal::node::AsBytes;
 use crate::ope_btree::internal::node::BranchNode;
 use crate::ope_btree::internal::node::LeafNode;
+use common::misc::ToVecBytes;
 use protocol::btree::{BtreeCallback, SearchCallback, SearchResult};
 
 impl<Cb: BtreeCallback> Cmd<Cb> {

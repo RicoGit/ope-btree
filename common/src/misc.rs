@@ -52,12 +52,32 @@ pub trait ToBytes: Sized {
     fn bytes_mut(self) -> BytesMut;
 }
 
-impl<T: Into<BytesMut>> ToBytes for T {
+impl ToBytes for Hash {
     fn bytes(self) -> Bytes {
-        self.into().freeze()
+        self.0.freeze()
     }
     fn bytes_mut(self) -> BytesMut {
         self.into()
+    }
+}
+
+impl ToBytes for Key {
+    fn bytes(self) -> Bytes {
+        self.0.freeze()
+    }
+    fn bytes_mut(self) -> BytesMut {
+        self.into()
+    }
+}
+
+impl ToBytes for Vec<u8> {
+    fn bytes(self) -> Bytes {
+        self.into()
+    }
+    fn bytes_mut(self) -> BytesMut {
+        let mut buf = BytesMut::new();
+        buf.extend_from_slice(&self);
+        buf
     }
 }
 
@@ -87,6 +107,35 @@ pub fn replace<T>(vector: &mut Vec<T>, item: T, idx: usize) {
     let _ = std::mem::replace(&mut vector[idx], item.into());
 }
 
+pub trait FromVecBytes {
+    /// Converts into Bytes without copying
+    fn into_byte_vec(self) -> Vec<Vec<u8>>;
+}
+
+impl FromVecBytes for Vec<Bytes> {
+    fn into_byte_vec(self) -> Vec<Vec<u8>> {
+        self.into_iter().map(|bytes| bytes.to_vec()).collect()
+    }
+}
+
+pub trait ToVecBytes {
+    /// Clone as bytes
+    fn clone_as_bytes(&self) -> Vec<Bytes>;
+
+    /// Converts into Bytes without copying
+    fn into_bytes(self) -> Vec<Bytes>;
+}
+
+impl<T: ToBytes + Clone> ToVecBytes for Vec<T> {
+    fn clone_as_bytes(&self) -> Vec<Bytes> {
+        self.iter().map(|t| t.clone().bytes()).collect()
+    }
+
+    fn into_bytes(self) -> Vec<Bytes> {
+        self.into_iter().map(|t| t.bytes()).collect()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -100,6 +149,18 @@ mod test {
 
         let hash = Hash(origin.clone());
         assert_eq!(origin.clone(), hash.bytes_mut());
+
+        let key = Key(origin.clone());
+        assert_eq!(origin.clone().freeze(), key.bytes());
+
+        let key = Key(origin.clone());
+        assert_eq!(origin.clone(), key.bytes_mut());
+
+        let vec = origin.to_vec();
+        assert_eq!(Bytes::from(vec.clone()), vec.bytes());
+
+        let vec = origin.to_vec();
+        assert_eq!(origin.clone(), vec.bytes_mut());
     }
 
     #[test]

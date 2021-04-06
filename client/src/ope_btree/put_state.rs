@@ -75,16 +75,16 @@ where
     Crypt: Decryptor<PlainData = Key> + Encryptor<PlainData = Key>,
 {
     /// Case when server asks next child
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
         keys: Vec<Bytes>,
-        children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize> {
+        children_checksums: Vec<Bytes>,
+    ) -> RpcFuture<usize> {
         log::debug!(
             "next_child_idx starts for {:?}, keys={:?}, children_hashes={:?}",
             &self,
             keys,
-            children_hashes
+            children_checksums
         );
 
         let result = self
@@ -94,7 +94,7 @@ where
                 self.m_root().clone(),
                 &mut self.m_path,
                 keys.into_iter().map(common::Key::from).collect(),
-                children_hashes.into_iter().map(Hash::from).collect(),
+                children_checksums.into_iter().map(Hash::from).collect(),
             )
             .map_err(Into::into);
 
@@ -109,11 +109,11 @@ where
     Crypt: Decryptor<PlainData = Key> + Encryptor<PlainData = Key>,
 {
     /// Case when server returns founded leaf
-    fn put_details<'f>(
+    fn put_details(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, ClientPutDetails> {
+    ) -> RpcFuture<ClientPutDetails> {
         log::debug!(
             "put_details starts for {:?}, keys:{:?}, values_hashes:{:?}",
             self,
@@ -132,10 +132,10 @@ where
             )
             .and_then(|search_res| {
                 // update idx in last proof if exists
-                self.m_path
-                    .0
-                    .last_mut()
-                    .map(|proof| proof.set_idx(search_res.idx()));
+
+                if let Some(proof) = self.m_path.0.last_mut() {
+                    proof.set_idx(search_res.idx())
+                }
 
                 self.encryptor
                     .encrypt(self.key.clone())
@@ -156,11 +156,7 @@ where
     }
 
     /// Case when server asks verify made changes
-    fn verify_changes<'f>(
-        &mut self,
-        server_merkle_root: Bytes,
-        was_split: bool,
-    ) -> RpcFuture<'f, Bytes> {
+    fn verify_changes(&mut self, server_merkle_root: Bytes, was_split: bool) -> RpcFuture<Bytes> {
         log::debug!(
             "verify_changes starts for {:?}, server_merkle_root:{:?}, was_split:{:?}",
             self,
@@ -199,7 +195,7 @@ where
     }
 
     /// Case when server confirmed changes persisted
-    fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
+    fn changes_stored(&mut self) -> RpcFuture<()> {
         // change global client state with new merkle root
         log::debug!("changes_stored starts for state={:?}", self);
         async { Ok(()) }.boxed()

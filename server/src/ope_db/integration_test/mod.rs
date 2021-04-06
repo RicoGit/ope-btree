@@ -28,7 +28,7 @@ async fn get_from_empty_db_test() {
 
     let (tx, _rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     let result = client.get(k(1)).await;
     assert_eq!(result.unwrap(), None)
@@ -40,7 +40,7 @@ async fn put_to_empty_db_test() {
 
     let (tx, _rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     let result = client.put(k(1), v(1)).await;
     assert_eq!(result.unwrap(), None);
@@ -53,7 +53,7 @@ async fn put_one_and_get_it_back_test() {
 
     let (tx, mut rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     let result = client.put(k(1), v(1)).await;
     assert_eq!(result.unwrap(), None);
@@ -74,7 +74,7 @@ async fn update_single_item_test() {
 
     let (tx, mut rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     assert_eq!(client.put(k(1), v(1)).await.unwrap(), None);
     assert_eq!(client.get(k(1)).await.unwrap(), Some(v(1)));
@@ -92,12 +92,12 @@ async fn one_depth_tree_test() {
 
     let (tx, rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
-    let changes = put(4, &client, rx).await;
+    let changes = put(4, &mut client, rx).await;
     assert_eq!(changes, dc("[[k1][v1]][[k2][v2]][[k3][v3]][[k4][v4]]", 4));
 
-    get(4, &client).await;
+    get(4, &mut client).await;
 }
 
 #[tokio::test]
@@ -107,15 +107,15 @@ async fn two_depth_tree_test() {
 
     let (tx, rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     let n = 10;
-    let changes = put(n, &client, rx).await;
+    let changes = put(n, &mut client, rx).await;
     // k1-k2-k6 - root
     // k1-k10-k2 | k3-k4 | k5-k6 | k7-k8-k9 - leaves
     assert_eq!(changes, dc("[k2][k4][k6][[[k1][v1]][[k10][v10]][[k2][v2]]][[[k3][v3]][[k4][v4]]][[[k5][v5]][[k6][v6]]][[[k7][v7]][[k8][v8]][[k9][v9]]]", n));
 
-    get(n, &client).await
+    get(n, &mut client).await
 }
 
 #[tokio::test]
@@ -125,13 +125,13 @@ async fn three_depth_tree_test() {
 
     let (tx, rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     let n = 20;
-    let changes = put(n, &client, rx).await;
+    let changes = put(n, &mut client, rx).await;
     assert_eq!(changes.new_version, n);
 
-    get(n, &client).await
+    get(n, &mut client).await
 }
 
 #[tokio::test]
@@ -141,13 +141,13 @@ async fn five_depth_tree_test() {
 
     let (tx, rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     let n = 200;
-    let changes = put(n, &client, rx).await;
+    let changes = put(n, &mut client, rx).await;
     assert_eq!(changes.new_version, n);
 
-    get(n, &client).await
+    get(n, &mut client).await
 }
 
 #[tokio::test]
@@ -157,13 +157,13 @@ async fn five_depth_tree_reverse_test() {
 
     let (tx, rx) = channel::<DatasetChanged>(1);
     let db = create_server(tx).await;
-    let client = create_client(db);
+    let mut client = create_client(db);
 
     let n = 200;
-    let changes = reverse_put(n, &client, rx).await;
+    let changes = reverse_put(n, &mut client, rx).await;
     assert_eq!(changes.new_version, n);
 
-    reverse_get(n, &client).await
+    reverse_get(n, &mut client).await
 }
 
 struct TestDatabaseRpc {
@@ -179,12 +179,12 @@ impl TestDatabaseRpc {
 }
 
 impl OpeDatabaseRpc for TestDatabaseRpc {
-    fn get<'f, Cb: SearchCallback + 'f>(
-        &self,
+    fn get<'cb, 's: 'cb, Cb: 'cb + SearchCallback + Send>(
+        &'s mut self,
         _dataset_id: Bytes,
         _version: usize,
         search_callback: Cb,
-    ) -> RpcFuture<'f, Option<Bytes>> {
+    ) -> RpcFuture<'cb, Option<Bytes>> {
         let db = self.db.clone();
         let cb = TestCb::search(Box::new(search_callback));
 
@@ -199,13 +199,13 @@ impl OpeDatabaseRpc for TestDatabaseRpc {
         .boxed()
     }
 
-    fn put<'f, Cb: PutCallback + 'f>(
-        &self,
+    fn put<'cb, 's: 'cb, Cb: 'cb + PutCallback + Send>(
+        &'s mut self,
         _dataset_id: Bytes,
         version: usize,
         put_callback: Cb,
         encrypted_value: Bytes,
-    ) -> RpcFuture<'f, Option<Bytes>> {
+    ) -> RpcFuture<'cb, Option<Bytes>> {
         let db = self.db.clone();
         let cb = TestCb::put(Box::new(put_callback));
 
@@ -233,7 +233,9 @@ unsafe impl<Cb> Sync for TestCb<Cb> {}
 impl<Cb> Drop for TestCb<Cb> {
     fn drop(&mut self) {
         if !self.copy {
-            unsafe { Box::from_raw(self.cb) };
+            unsafe {
+                self.cb.drop_in_place();
+            }
         }
     }
 }
@@ -262,11 +264,11 @@ impl<Cb: PutCallback> TestCb<Cb> {
 }
 
 impl<Cb: BtreeCallback> BtreeCallback for TestCb<Cb> {
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
         keys: Vec<Bytes>,
         children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize> {
+    ) -> RpcFuture<usize> {
         unsafe {
             self.cb
                 .as_mut()
@@ -277,29 +279,29 @@ impl<Cb: BtreeCallback> BtreeCallback for TestCb<Cb> {
 }
 
 impl<Cb: SearchCallback> SearchCallback for TestCb<Cb> {
-    fn submit_leaf<'f>(
+    fn submit_leaf(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, SearchResult> {
+    ) -> RpcFuture<SearchResult> {
         unsafe { self.cb.as_mut().unwrap().submit_leaf(keys, values_hashes) }
     }
 }
 
 impl<Cb: PutCallback> PutCallback for TestCb<Cb> {
-    fn put_details<'f>(
+    fn put_details(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, ClientPutDetails> {
+    ) -> RpcFuture<ClientPutDetails> {
         unsafe { self.cb.as_mut().unwrap().put_details(keys, values_hashes) }
     }
 
-    fn verify_changes<'f>(
+    fn verify_changes(
         &mut self,
         server_merkle_root: Bytes,
         was_splitting: bool,
-    ) -> RpcFuture<'f, Bytes> {
+    ) -> RpcFuture<Bytes> {
         unsafe {
             self.cb
                 .as_mut()
@@ -308,8 +310,8 @@ impl<Cb: PutCallback> PutCallback for TestCb<Cb> {
         }
     }
 
-    fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
-        unsafe { self.cb.as_ref().unwrap().changes_stored() }
+    fn changes_stored(&mut self) -> RpcFuture<()> {
+        unsafe { self.cb.as_mut().unwrap().changes_stored() }
     }
 }
 
@@ -368,7 +370,7 @@ fn dc(hash: &str, version: usize) -> DatasetChanged {
 /// Puts n items and returns last MerkelRoot
 async fn put(
     n: usize,
-    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+    client: &mut OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
     mut rx: Receiver<DatasetChanged>,
 ) -> DatasetChanged {
     let mut m_root = None;
@@ -384,7 +386,7 @@ async fn put(
 /// Puts n items and returns last MerkelRoot
 async fn reverse_put(
     n: usize,
-    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+    client: &mut OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
     mut rx: Receiver<DatasetChanged>,
 ) -> DatasetChanged {
     let mut m_root = None;
@@ -399,7 +401,7 @@ async fn reverse_put(
 
 async fn get(
     n: usize,
-    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+    client: &mut OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
 ) {
     for idx in 1..n + 1 {
         let res = client.get(k(idx)).await;
@@ -409,7 +411,7 @@ async fn get(
 
 async fn reverse_get(
     n: usize,
-    client: &OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
+    client: &mut OpeDatabaseClient<NoOpCrypt, NoOpCrypt, NoOpHasher, TestDatabaseRpc>,
 ) {
     for idx in (1..n + 1).rev() {
         let res = client.get(k(idx)).await;

@@ -9,12 +9,12 @@ message GetCallback {
         GetValue value = 1;
 
         // ask index of search key in branch
-        AskNextChildIndex nextChildIndex = 10;
+        AskNextChildIndex next_child_idx = 10;
         // ask index of search key in leaf
-        AskSubmitLeaf submitLeaf = 11;
+        AskSubmitLeaf submit_leaf = 11;
 
         // sends server error to client
-        Error serverError = 20;
+        Error server_error = 20;
     }
 }
 
@@ -22,15 +22,15 @@ message GetCallback {
 message GetCallbackReply {
     oneof reply {
         // client sends database info (id and version)
-        DbInfo dbInfo = 1;
+        DbInfo db_info = 1;
 
         // client sends results of searching a key in the leaf
-        ReplyNextChildIndex nextChildIndex = 10;
+        ReplyNextChildIndex next_child_idx = 10;
         // client sends results of searching a key in the leaf
-        ReplySubmitLeaf submitLeaf = 11;
+        ReplySubmitLeaf submit_leaf = 11;
 
         // client sends client error to server
-        Error clientError = 20;
+        Error server_error = 20;
     }
 
 }
@@ -42,17 +42,17 @@ message PutCallback {
         PreviousValue value = 1;
 
         // server asks index of search key in branch
-        AskNextChildIndex nextChildIndex = 10;
+        AskNextChildIndex next_child_idx = 10;
 
         // server asks index of search key in leaf and other details for putting
-        AskPutDetails putDetails = 20;
+        AskPutDetails put_details = 20;
         // server asks verify made changes
-        AskVerifyChanges verifyChanges = 21;
+        AskVerifyChanges verify_changes = 21;
         // server confirms that all changes was persisted
-        AskChangesStored changesStored = 22;
+        AskChangesStored changes_stored = 22;
 
         // server sends server error to client
-        Error serverError = 30;
+        Error server_error = 30;
     }
 }
 
@@ -61,22 +61,22 @@ message PutCallbackReply {
     oneof reply {
         // Initial (first) message in a client-server round trip.
         // client sends database info (id and version)
-        DbInfo dbInfo = 1;
+        DbInfo db_info = 1;
         // client sends value for putting
         PutValue value = 2;
 
         // client sends index of search key in branch
-        ReplyNextChildIndex nextChildIndex = 10;
+        ReplyNextChildIndex next_child_idx = 10;
 
         // client sends index of search key in leaf and other details for putting
-        ReplyPutDetails putDetails = 20;
+        ReplyPutDetails put_details = 20;
         // client confirms made changes
-        ReplyVerifyChanges verifyChanges = 21;
+        ReplyVerifyChanges verify_changes = 21;
         // client confirms server confirmation
-        ReplyChangesStored changesStored = 22;
+        ReplyChangesStored changes_stored = 22;
 
         // client sends client error to server
-        Error clientError = 30;
+        Error server_error = 30;
     }
 }
 
@@ -93,11 +93,11 @@ message DbInfo {
 //
 message AskNextChildIndex {
     repeated bytes keys = 1;
-    repeated bytes childrenChecksums = 2;
+    repeated bytes children_checksums = 2;
 }
 
 message ReplyNextChildIndex {
-    int32 index = 1;
+    uint32 index = 1;
 }
 
 //
@@ -105,18 +105,18 @@ message ReplyNextChildIndex {
 //
 message AskSubmitLeaf {
     repeated bytes keys = 1;
-    repeated bytes valuesChecksums = 2;
+    repeated bytes values_checksums = 2;
 }
 
 message ReplySubmitLeaf {
     oneof searchResult {
         int32 found = 1;
-        int32 insertionPoint = 2;
+        int32 insertion_point = 2;
     }
 }
 
 message GetValue {
-    bytes value = 1;
+    optional bytes value = 1;
 }
 
 message Error {
@@ -129,7 +129,7 @@ message Error {
 //
 message AskPutDetails {
     repeated bytes keys = 1;
-    repeated bytes valuesChecksums = 2;
+    repeated bytes values_checksums = 2;
 }
 
 message ReplyPutDetails {
@@ -138,17 +138,17 @@ message ReplyPutDetails {
 
     oneof searchResult {
         int32 found = 3;
-        int32 insertionPoint = 4;
+        int32 insertion_point = 4;
     }
 }
 
 message AskVerifyChanges {
-    bytes serverMerkleRoot = 1;
-    bool wasSplit = 2;
+    bytes server_merkle_root = 1;
+    bool was_split = 2;
 }
 
 message ReplyVerifyChanges {
-    // Signature for concatenation of version and serverMerkleRoot
+    // Signed version + serverMerkleRoot
     bytes signature = 1;
 }
 
@@ -156,7 +156,7 @@ message AskChangesStored {}
 message ReplyChangesStored {}
 
 message PreviousValue {
-    bytes value = 1;
+    optional bytes value = 1;
 }
 
 message PutValue {

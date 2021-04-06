@@ -66,11 +66,11 @@ pub mod tests {
     }
 
     impl BtreeCallback for TestCallback {
-        fn next_child_idx<'f>(
+        fn next_child_idx(
             &mut self,
             _keys: Vec<Bytes>,
             _children_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, usize> {
+        ) -> RpcFuture<usize> {
             let res = self
                 .next_child_idx_vec
                 .pop()
@@ -80,11 +80,11 @@ pub mod tests {
     }
 
     impl SearchCallback for TestCallback {
-        fn submit_leaf<'f>(
+        fn submit_leaf(
             &mut self,
             _keys: Vec<Bytes>,
             _values_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, SearchResult> {
+        ) -> RpcFuture<SearchResult> {
             let res = self
                 .submit_leaf_vec
                 .pop()
@@ -94,11 +94,11 @@ pub mod tests {
     }
 
     impl PutCallback for TestCallback {
-        fn put_details<'f>(
+        fn put_details(
             &mut self,
             _keys: Vec<Bytes>,
             _values_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, ClientPutDetails> {
+        ) -> RpcFuture<ClientPutDetails> {
             let res = self
                 .put_details_vec
                 .pop()
@@ -106,11 +106,11 @@ pub mod tests {
             async move { Ok(res) }.boxed()
         }
 
-        fn verify_changes<'f>(
+        fn verify_changes(
             &mut self,
             _server_merkle_root: Bytes,
             _was_splitting: bool,
-        ) -> RpcFuture<'f, Bytes> {
+        ) -> RpcFuture<Bytes> {
             let res = self
                 .verify_changes_vec
                 .pop()
@@ -118,7 +118,7 @@ pub mod tests {
             async move { Ok(res) }.boxed()
         }
 
-        fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
+        fn changes_stored(&mut self) -> RpcFuture<()> {
             async {
                 log::trace!("TestCallback.changes_stored: All changes stored");
                 Ok(())

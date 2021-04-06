@@ -27,17 +27,17 @@ pub trait BtreeCallback {
     /// # Arguments
     ///
     /// * `keys` - Keys of current branch for searching position
-    /// * `children_hashes` - All children's hashes of current branch
+    /// * `children_checksums` - All children's hashes of current branch
     ///
     /// # Return
     ///
     /// Next child node position.
     ///
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
         keys: Vec<Bytes>,
-        children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize>;
+        children_checksums: Vec<Bytes>,
+    ) -> RpcFuture<usize>;
 }
 
 /// Wrapper for all callbacks needed for BTree's search operation.
@@ -56,11 +56,11 @@ pub trait SearchCallback: BtreeCallback {
     /// A result of searching client key in a current branch keys.
     /// Returns Err(idx) if key was found, Ok(idx) otherwise
     ///
-    fn submit_leaf<'f>(
+    fn submit_leaf(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, SearchResult>;
+    ) -> RpcFuture<SearchResult>;
 }
 
 /// A structure for holding all client details needed for inserting a key and a
@@ -101,31 +101,31 @@ pub trait PutCallback: BtreeCallback {
     ///
     /// Details from client needed for inserting a key and a value to the BTree.
     ///
-    fn put_details<'f>(
+    fn put_details(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, ClientPutDetails>;
+    ) -> RpcFuture<ClientPutDetails>;
 
     /// Server sends a new merkle root to a client for approve made changes.
     ///
     /// # Arguments
     ///
     /// * `server_merkle_root` - New merkle root after inserting key/value
-    /// * `values_hashes` - 'True' if server performed tree rebalancing, 'False' otherwise
+    /// * `was_splitting` - 'True' if server performed tree rebalancing, 'False' otherwise
     ///
     /// # Return
     ///
     /// Returns signed by client new merkle root as bytes.
     ///
-    fn verify_changes<'f>(
+    fn verify_changes(
         &mut self,
         server_merkle_root: Bytes,
         was_splitting: bool,
-    ) -> RpcFuture<'f, Bytes>;
+    ) -> RpcFuture<Bytes>;
 
     /// Server confirms that all changes was persisted.
-    fn changes_stored<'f>(&self) -> RpcFuture<'f, ()>;
+    fn changes_stored(&mut self) -> RpcFuture<()>;
 }
 
 // todo add callback for remove operation

@@ -165,7 +165,7 @@ where
         } else {
             Err(BTreeClientError::wrong_proof(
                 key,
-                keys.clone(),
+                keys,
                 children_hashes,
                 &m_root,
             ))
@@ -207,7 +207,7 @@ where
         } else {
             Err(BTreeClientError::wrong_proof(
                 key,
-                keys.clone(),
+                keys,
                 children_hashes,
                 &m_root,
             ))
@@ -234,12 +234,13 @@ impl State {
 
 #[cfg(feature = "test")]
 pub mod test {
+    //! This module contains helpers for testing and debugging.
+
     use super::*;
     use bytes::Bytes;
     use common::noop_hasher::NoOpHasher;
     use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback};
     use protocol::RpcFuture;
-    use std::sync::Mutex;
 
     #[derive(Clone, Debug)]
     pub struct NoOpCrypt {}
@@ -262,54 +263,86 @@ pub mod test {
 
     /// Wraps PutState and used for testing, contains simple blocking Mutex for protect PutState.
     /// Allows use non-cloneable PutState directly in Btree that requires clone.
-    #[derive(Clone, Debug)]
+    #[derive(Debug)]
     pub struct PutStateWrapper<'a> {
-        state: Arc<Mutex<PutState<'a, String, NoOpHasher, NoOpCrypt>>>,
+        state_ptr: *mut PutState<'a, String, NoOpHasher, NoOpCrypt>,
+        copy: bool,
     }
 
     impl<'a> PutStateWrapper<'a> {
-        pub fn new(put_state: PutState<'a, String, NoOpHasher, NoOpCrypt>) -> Self {
-            PutStateWrapper {
-                state: Arc::new(Mutex::new(put_state)),
-            }
+        pub fn new(mut put_state: PutState<'a, String, NoOpHasher, NoOpCrypt>) -> Self {
+            let wrapper = PutStateWrapper {
+                state_ptr: &mut put_state,
+                copy: false,
+            };
+            std::mem::forget(put_state);
+            wrapper
         }
     }
 
     impl<'a> BtreeCallback for PutStateWrapper<'a> {
-        fn next_child_idx<'f>(
+        fn next_child_idx(
             &mut self,
             keys: Vec<Bytes>,
-            children_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, usize> {
-            self.state
-                .lock()
-                .unwrap()
-                .next_child_idx(keys, children_hashes)
+            children_checksums: Vec<Bytes>,
+        ) -> RpcFuture<usize> {
+            unsafe {
+                self.state_ptr
+                    .as_mut()
+                    .unwrap()
+                    .next_child_idx(keys, children_checksums)
+            }
         }
     }
 
     impl<'a> PutCallback for PutStateWrapper<'a> {
-        fn put_details<'f>(
+        fn put_details(
             &mut self,
             keys: Vec<Bytes>,
             values_hashes: Vec<Bytes>,
-        ) -> RpcFuture<'f, ClientPutDetails> {
-            self.state.lock().unwrap().put_details(keys, values_hashes)
+        ) -> RpcFuture<ClientPutDetails> {
+            unsafe {
+                self.state_ptr
+                    .as_mut()
+                    .unwrap()
+                    .put_details(keys, values_hashes)
+            }
         }
 
-        fn verify_changes<'f>(
+        fn verify_changes(
             &mut self,
             server_merkle_root: Bytes,
             was_splitting: bool,
-        ) -> RpcFuture<'f, Bytes> {
-            self.state
-                .lock()
-                .unwrap()
-                .verify_changes(server_merkle_root, was_splitting)
+        ) -> RpcFuture<Bytes> {
+            unsafe {
+                self.state_ptr
+                    .as_mut()
+                    .unwrap()
+                    .verify_changes(server_merkle_root, was_splitting)
+            }
         }
 
-        fn changes_stored<'f>(&self) -> RpcFuture<'f, ()> {
-            self.state.lock().unwrap().changes_stored()
+        fn changes_stored(&mut self) -> RpcFuture<()> {
+            unsafe { self.state_ptr.as_mut().unwrap().changes_stored() }
+        }
+    }
+
+    impl Clone for PutStateWrapper<'_> {
+        fn clone(&self) -> Self {
+            PutStateWrapper {
+                state_ptr: self.state_ptr,
+                copy: true,
+            }
+        }
+    }
+
+    impl Drop for PutStateWrapper<'_> {
+        fn drop(&mut self) {
+            unsafe {
+                if !self.copy {
+                    self.state_ptr.drop_in_place()
+                }
+            }
         }
     }
 }

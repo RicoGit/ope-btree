@@ -19,8 +19,8 @@ related paper: https://eprint.iacr.org/2013/129.pdf
     
 ### Notes: 
 
-- BTree operarates only bytes, there is no needed to different K and V
-- Only tree client now what is actually type of K and V
+- BTree operates only bytes, there is no needed to different K and V
+- Only tree client know what is actually type of K and V
 - Maybe consider using channels instead of callbacks
 
 
@@ -33,7 +33,7 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 - [x] integration test for BTree
 - [x] create Database
 - [x] integration test for Database
-- [ ] implement transport (Grpc)
+- [x] implement transport (Grpc)
 - [ ] make integration test with real transport
 - [ ] create CI with Github actions
 - [ ] make distribution for server (build docker image)

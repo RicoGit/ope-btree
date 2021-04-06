@@ -2,7 +2,9 @@
 
 members = [
     "client",
+    "client/grpc",
     "common",
     "server",
+    "server/grpc",
     "protocol",
 ]

@@ -1,8 +1,8 @@
 use crate::ope_btree::command::{Cmd, Result};
-use crate::ope_btree::internal::node::{AsBytes, LeafNode};
+use crate::ope_btree::internal::node::LeafNode;
 use bytes::Bytes;
 use common::merkle::MerklePath;
-use common::misc::ToBytes;
+use common::misc::{ToBytes, ToVecBytes};
 use common::Digest;
 use protocol::btree::{ClientPutDetails, PutCallback};
 

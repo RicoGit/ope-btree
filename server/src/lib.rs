@@ -4,6 +4,8 @@
 
 #![allow(dead_code)] // todo remove later
 
+pub use common::{Digest, Hash};
+
 // Order-preserving encryption Btree implementation
 pub mod ope_btree;
 

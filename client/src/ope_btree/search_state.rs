@@ -50,11 +50,11 @@ where
     Dec: Decryptor<PlainData = Key>,
 {
     /// Case when server asks next child
-    fn next_child_idx<'f>(
+    fn next_child_idx(
         &mut self,
         keys: Vec<Bytes>,
         children_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, usize> {
+    ) -> RpcFuture<usize> {
         log::debug!(
             "next_child_idx starts for {:?}, keys={:?}, children_hashes={:?}",
             self,
@@ -86,11 +86,11 @@ where
 {
     /// Case when server returns founded leaf, this leaf either contains key,
     /// or new key may be inserted in this leaf
-    fn submit_leaf<'f>(
+    fn submit_leaf(
         &mut self,
         keys: Vec<Bytes>,
         values_hashes: Vec<Bytes>,
-    ) -> RpcFuture<'f, SearchResult> {
+    ) -> RpcFuture<SearchResult> {
         log::debug!(
             "submit_leaf starts for {:?} keys={:?}, value_hashes:{:?}",
             self,

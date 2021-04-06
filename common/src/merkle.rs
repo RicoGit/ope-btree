@@ -53,11 +53,11 @@ impl NodeProof {
         children_hashes: Vec<Hash>,
         substitution_idx: Option<usize>,
     ) -> Self {
-        assert!(substitution_idx.is_none() || substitution_idx.unwrap() < children_hashes.len(), format!(
+        assert!(substitution_idx.is_none() || substitution_idx.unwrap() < children_hashes.len(),
             "Substitution index have to be less than number of children hashes {}, but actually it is {:?}",
             children_hashes.len(),
             substitution_idx
-        ));
+        );
 
         NodeProof {
             state_hash,

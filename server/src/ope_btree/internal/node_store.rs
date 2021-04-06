@@ -39,10 +39,10 @@ where
     Store: KVStore<Vec<u8>, Vec<u8>>,
     IdGen: Generator<Item = Id>,
 {
-    pub fn new(store: Store, id_generator: IdGen) -> Self {
+    pub fn new(store: Store, node_ref_gen: IdGen) -> Self {
         BinaryNodeStore {
             store: BinKVStore::new(store),
-            id_generator,
+            id_generator: node_ref_gen,
         }
     }
 

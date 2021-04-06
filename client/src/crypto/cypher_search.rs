@@ -29,7 +29,7 @@ where
     /// Returns [`Result::Ok`] value containing the index corresponding to the search element in the
     /// sequence. A [`Result::Err`] value containing the index where the element would be inserted if
     ///  the search element is not found in the sequence.
-    pub fn binary_search(&self, slice: &Vec<Key>, key: PlainData) -> Result<SearchResult> {
+    pub fn binary_search(&self, slice: &[Key], key: PlainData) -> Result<SearchResult> {
         let mut size = slice.len();
         if size == 0 {
             return Ok(SearchResult(Err(0)));
