@@ -116,6 +116,7 @@ where
         // find place into index and get value reference
         let mut index_lock = self.index.write().await;
         let (val_ref, state_signed_by_client) = index_lock.put(Cmd::new(put_callback)).await?;
+        log::debug!("Index updated {:?}, {:?}", val_ref, state_signed_by_client);
 
         // safe new value to value store
         let mut val_store = self.value_store.write().await;

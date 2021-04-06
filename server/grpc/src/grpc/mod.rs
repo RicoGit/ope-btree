@@ -179,10 +179,8 @@ where
                         log::debug!("Starting a client-server round trip in parallel");
                         let db = self.db.clone();
                         tokio::spawn(async move {
-                            let callback = put_cb::PutCbImpl {
-                                server_requests: server_requests_in.clone(),
-                                client_replies,
-                            };
+                            let callback =
+                                put_cb::PutCbImpl::new(server_requests_in.clone(), client_replies);
 
                             let search_result =
                                 match db.put(callback, version as usize, value.bytes()).await {
@@ -206,7 +204,7 @@ where
                         result_in.send(Ok(Response::new(stream)));
                     }
                     Ok(unexpected) => {
-                        let status = errors::unexpected_msg_err("PutValue", unexpected);
+                        let status = errors::unexpected_msg_status("PutValue", unexpected);
                         result_in.send(Err(status));
                     }
                     Err(status) => {
@@ -216,7 +214,7 @@ where
                 }
             }
             Ok(unexpected) => {
-                let status = errors::unexpected_msg_err("DbInfo", unexpected);
+                let status = errors::unexpected_msg_status("DbInfo", unexpected);
                 result_in.send(Err(status));
             }
             Err(status) => {

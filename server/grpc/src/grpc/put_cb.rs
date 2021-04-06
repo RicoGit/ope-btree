@@ -2,7 +2,7 @@ use kvstore_api::kvstore::KVStore;
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use prost::bytes::Bytes;
 use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback, SearchCallback, SearchResult};
-use protocol::RpcFuture;
+use protocol::{ProtocolError, RpcFuture};
 use rpc::db_rpc_server::DbRpc;
 use rpc::{DbInfo, PutValue};
 
@@ -21,23 +21,38 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::codegen::Stream;
 use tonic::{Request, Response, Status, Streaming};
 
-// #[derive(Clone)]
+#[derive(Clone)]
 pub struct PutCbImpl {
     /// Server sends requests to this channel
     pub server_requests: Sender<Result<rpc::PutCallback, Status>>,
     /// Server receives client responses from this stream
-    pub client_replies: Streaming<rpc::PutCallbackReply>,
+    pub client_replies: Arc<Mutex<Streaming<rpc::PutCallbackReply>>>,
 }
 
-// todo remove later, do impl Clone for Cmd instead
-impl Clone for PutCbImpl {
-    fn clone(&self) -> Self {
-        unimplemented!("Impl Clone for Cmd")
+impl PutCbImpl {
+    pub fn new(
+        server_requests: Sender<Result<rpc::PutCallback, Status>>,
+        client_replies: Streaming<rpc::PutCallbackReply>,
+    ) -> Self {
+        PutCbImpl {
+            server_requests,
+            client_replies: Arc::new(Mutex::new(client_replies)),
+        }
+    }
+
+    pub async fn try_next(&self) -> Result<Option<rpc::PutCallbackReply>, ProtocolError> {
+        let mut lock = self.client_replies.lock().await;
+        let res = lock.try_next().await;
+        res.map_err(|status| {
+            log::warn!("Client sends error: {:?}", &status);
+            errors::opt_status_to_protocol_err(Some(status))
+        })
     }
 }
 
@@ -63,18 +78,16 @@ impl BtreeCallback for PutCbImpl {
                 .map_err(errors::send_err_to_protocol_err)?;
 
             // wait response from client
-            let response = self.client_replies.try_next().await;
+            let response = self.try_next().await?;
 
-            if let Ok(Some(rpc::PutCallbackReply {
+            if let Some(rpc::PutCallbackReply {
                 reply: Some(PutReply::NextChildIdx(rpc::ReplyNextChildIndex { index })),
-            })) = response
+            }) = response
             {
                 log::debug!("Receive ReplyNextChildIndex({:?})", index);
-
                 Ok(index as usize)
             } else {
-                log::warn!("Expected ReplyNextChildIndex, actually: {:?}", &response);
-                Err(errors::opt_status_to_protocol_err(response.err()))
+                Err(errors::unexpected_msg_err("ReplyNextChildIndex", response))
             }
         };
 
@@ -100,16 +113,16 @@ impl PutCallback for PutCbImpl {
                 .map_err(errors::send_err_to_protocol_err)?;
 
             // wait response from client
-            let response = self.client_replies.try_next().await;
+            let response = self.try_next().await?;
 
-            if let Ok(Some(rpc::PutCallbackReply {
+            if let Some(rpc::PutCallbackReply {
                 reply:
                     Some(PutReply::PutDetails(rpc::ReplyPutDetails {
                         key,
                         checksum,
                         search_result,
                     })),
-            })) = response
+            }) = response
             {
                 log::debug!(
                     "Receive ReplyPutDetails({:?},{:?},{:?})",
@@ -124,8 +137,7 @@ impl PutCallback for PutCbImpl {
                     rpc::put::search_result(search_result),
                 ))
             } else {
-                log::warn!("Expected ReplyPutDetails, actually: {:?}", &response);
-                Err(errors::opt_status_to_protocol_err(response.err()))
+                Err(errors::unexpected_msg_err("ReplyPutDetails", response))
             }
         };
 
@@ -156,17 +168,16 @@ impl PutCallback for PutCbImpl {
                 .map_err(errors::send_err_to_protocol_err)?;
 
             // wait response from client
-            let response = self.client_replies.try_next().await;
+            let response = self.try_next().await?;
 
-            if let Ok(Some(rpc::PutCallbackReply {
+            if let Some(rpc::PutCallbackReply {
                 reply: Some(PutReply::VerifyChanges(rpc::ReplyVerifyChanges { signature })),
-            })) = response
+            }) = response
             {
                 log::debug!("Receive ReplyVerifyChanges({:?})", signature);
                 Ok(signature.bytes())
             } else {
-                log::warn!("Expected ReplyVerifyChanges, actually: {:?}", &response);
-                Err(errors::opt_status_to_protocol_err(response.err()))
+                Err(errors::unexpected_msg_err("ReplyVerifyChanges", response))
             }
         };
 
@@ -186,17 +197,16 @@ impl PutCallback for PutCbImpl {
                 .map_err(errors::send_err_to_protocol_err)?;
 
             // wait response from client
-            let response = self.client_replies.try_next().await;
+            let response = self.try_next().await?;
 
-            if let Ok(Some(rpc::PutCallbackReply {
+            if let Some(rpc::PutCallbackReply {
                 reply: Some(PutReply::ChangesStored(rpc::ReplyChangesStored {})),
-            })) = response
+            }) = response
             {
                 log::debug!("Receive ReplyVerifyChanges()");
                 Ok(())
             } else {
-                log::warn!("Expected ReplyVerifyChanges, actually: {:?}", &response);
-                Err(errors::opt_status_to_protocol_err(response.err()))
+                Err(errors::unexpected_msg_err("ReplyVerifyChanges", response))
             }
         };
 

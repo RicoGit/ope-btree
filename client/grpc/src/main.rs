@@ -19,7 +19,7 @@ mod lib;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + 'static>> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let addr = "http://[::1]:7777";
     let mut client = DbRpcClient::connect(addr).await?;
