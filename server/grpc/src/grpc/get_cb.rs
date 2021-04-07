@@ -1,30 +1,13 @@
-use kvstore_api::kvstore::KVStore;
-use kvstore_inmemory::hashmap_store::HashMapKVStore;
-use prost::bytes::Bytes;
-use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback, SearchCallback, SearchResult};
-use protocol::RpcFuture;
-use rpc::db_rpc_server::DbRpc;
-use rpc::{DbInfo, PutValue};
-
-use crate::grpc::rpc::get::value_msg;
 use crate::grpc::{errors, rpc};
-use common::misc::{FromVecBytes, ToBytes, ToVecBytes};
+
 use futures::FutureExt;
-use log::*;
+use prost::bytes::Bytes;
+use protocol::btree::{BtreeCallback, SearchCallback, SearchResult};
+use protocol::RpcFuture;
 use rpc::get_callback_reply::Reply as GetReply;
-use rpc::put_callback_reply::Reply as PutReply;
-use server::ope_btree::BTreeErr::ProtocolErr;
-use server::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen};
-use server::ope_db::{DatasetChanged, DbError, OpeDatabase};
-use server::Digest;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tonic::codegen::Stream;
-use tonic::{Request, Response, Status, Streaming};
+use tonic::{Status, Streaming};
 
 pub struct GetCbImpl {
     /// Server sends requests to this channel

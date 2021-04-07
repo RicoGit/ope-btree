@@ -1,28 +1,21 @@
 pub mod errors;
 pub mod rpc;
 
+use bytes::Bytes;
+use common::misc::ToBytes;
 use kvstore_api::kvstore::KVStore;
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
-use prost::bytes::Bytes;
-use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback, SearchCallback, SearchResult};
-use protocol::RpcFuture;
 use rpc::db_rpc_server::DbRpc;
-use rpc::{DbInfo, PutValue};
-
-use crate::grpc::rpc::get::value_msg;
-use common::misc::{FromVecBytes, ToBytes, ToVecBytes};
-use futures::FutureExt;
-use log::*;
 use rpc::get_callback_reply::Reply as GetReply;
 use rpc::put_callback_reply::Reply as PutReply;
-use server::ope_btree::BTreeErr::ProtocolErr;
-use server::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen};
-use server::ope_db::{DatasetChanged, DbError, OpeDatabase};
+use rpc::DbInfo;
+use server::ope_btree::OpeBTreeConf;
+use server::ope_db::{DatasetChanged, OpeDatabase};
 use server::Digest;
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::codegen::Stream;
@@ -72,7 +65,7 @@ where
             Some(client_reply) => {
                 if let Err(status) = client_reply {
                     log::warn!("Client's reply error: {:?}", status);
-                    result_in.send(Err(status));
+                    reply(result_in, Err(status))?;
                 } else {
                     match client_reply.unwrap().reply {
                         Some(GetReply::DbInfo(DbInfo { id, version })) => {
@@ -103,14 +96,19 @@ where
                                     }
                                 };
 
-                                server_requests_in.send(Ok(search_result)).await;
+                                server_requests_in
+                                    .send(Ok(search_result))
+                                    .await
+                                    .unwrap_or_else(|_| {
+                                        log::warn!("Sending reply to client failed")
+                                    });
                             });
 
                             log::debug!("Return server request stream");
                             let stream: Self::GetStream =
                                 Box::pin(ReceiverStream::new(server_requests_out));
 
-                            result_in.send(Ok(Response::new(stream)));
+                            reply(result_in, Ok(Response::new(stream)))?;
                         }
 
                         //
@@ -122,7 +120,7 @@ where
                                 unexpected
                             );
                             log::warn!("{}", msg);
-                            result_in.send(Err(Status::invalid_argument(msg.to_string())));
+                            reply(result_in, Err(Status::invalid_argument(msg.to_string())))?;
                         }
                     }
                 }
@@ -194,32 +192,35 @@ where
                                     }
                                 };
 
-                            server_requests_in.send(Ok(search_result)).await;
+                            server_requests_in
+                                .send(Ok(search_result))
+                                .await
+                                .unwrap_or_else(|_| log::warn!("Sending reply to client failed"));
                         });
 
                         log::debug!("Return server request stream");
                         let stream: Self::PutStream =
                             Box::pin(ReceiverStream::new(server_requests_out));
 
-                        result_in.send(Ok(Response::new(stream)));
+                        reply(result_in, Ok(Response::new(stream)))?;
                     }
                     Ok(unexpected) => {
                         let status = errors::unexpected_msg_status("PutValue", unexpected);
-                        result_in.send(Err(status));
+                        reply(result_in, Err(status))?;
                     }
                     Err(status) => {
                         log::warn!("Client's reply error: {:?}", status);
-                        result_in.send(Err(status));
+                        reply(result_in, Err(status))?;
                     }
                 }
             }
             Ok(unexpected) => {
                 let status = errors::unexpected_msg_status("DbInfo", unexpected);
-                result_in.send(Err(status));
+                reply(result_in, Err(status))?;
             }
             Err(status) => {
                 log::warn!("Client's reply error: {:?}", status);
-                result_in.send(Err(status));
+                reply(result_in, Err(status))?;
             }
         }
 
@@ -228,4 +229,13 @@ where
             .await
             .map_err(|_| Status::internal("Result channel error"))?
     }
+}
+
+fn reply<T>(
+    sender: oneshot::Sender<Result<Response<T>, Status>>,
+    payload: Result<Response<T>, Status>,
+) -> Result<(), Status> {
+    sender
+        .send(payload)
+        .map_err(|msg| errors::send_err_to_status(msg))
 }

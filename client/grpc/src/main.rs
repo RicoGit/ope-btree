@@ -11,18 +11,16 @@ use env_logger::Env;
 use lib::rpc::db_rpc_client::DbRpcClient;
 use std::error::Error;
 use std::sync::atomic::AtomicUsize;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Server;
-use tonic::Request;
 
 mod lib;
 
+// todo move it to separate integration test
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + 'static>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let addr = "http://[::1]:7777";
-    let mut client = DbRpcClient::connect(addr).await?;
+    let client = DbRpcClient::connect(addr).await?;
     let rpc = lib::GrpcDbRpc::new(client);
 
     log::info!("Connected to {}", addr);
@@ -68,6 +66,47 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
     let res = db_client.get(k2).await?;
     log::info!("Response: {:?}", res);
     assert_eq!(Some(v2), res);
+
+    let n = 20;
+    for idx in 3..n {
+        log::info!("Send PUT k{:?} v{:?}", idx, idx);
+        let k = format!("k{:?}", idx);
+        let v = format!("k{:?}", idx);
+        let res = db_client.put(k, v.clone()).await?;
+        log::info!("Response: {:?}", res);
+        assert_eq!(None, res);
+    }
+
+    for idx in 3..n {
+        log::info!("Send GET k{:?} v{:?}", idx, idx);
+        let k = format!("k{:?}", idx);
+        let v = format!("k{:?}", idx);
+        let res = db_client.get(k).await?;
+        log::info!("Response: {:?}", res);
+        assert_eq!(Some(v), res);
+    }
+
+    // override values
+
+    let n = 10;
+    for idx in 3..n {
+        log::info!("Send PUT k{:?} v{:?}", idx, idx);
+        let k = format!("k{:?}", idx);
+        let old_v = format!("k{:?}", idx);
+        let new_v = format!("k{:?}!", idx);
+        let res = db_client.put(k, new_v).await?;
+        log::info!("Response: {:?}", res);
+        assert_eq!(Some(old_v), res);
+    }
+
+    for idx in 3..n {
+        log::info!("Send GET k{:?} v{:?}", idx, idx);
+        let k = format!("k{:?}", idx);
+        let v = format!("k{:?}!", idx);
+        let res = db_client.get(k).await?;
+        log::info!("Response: {:?}", res);
+        assert_eq!(Some(v), res);
+    }
 
     Ok(())
 }

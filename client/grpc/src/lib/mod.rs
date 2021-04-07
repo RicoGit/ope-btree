@@ -1,20 +1,16 @@
-use crate::lib::errors::status_to_protocol_err;
+#![allow(irrefutable_let_patterns)]
+
 use crate::lib::rpc::db_rpc_client::DbRpcClient;
-use client::ope_btree::errors::BTreeClientError;
-use client::ope_btree::errors::BTreeClientError::ProtocolErr;
-use client::ope_db::OpeDatabaseClient;
 use common::misc::ToBytes;
 use common::misc::ToVecBytes;
 use futures::FutureExt;
-use futures::{StreamExt, TryStreamExt};
+use futures::TryStreamExt;
 use prost::bytes::Bytes;
 use protocol::btree::{PutCallback, SearchCallback};
 use protocol::database::OpeDatabaseRpc;
 use protocol::{ProtocolError, RpcFuture};
-use std::fmt::Debug;
-use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, Response, Status, Streaming};
+use tonic::Request;
 
 pub mod errors;
 pub mod rpc;
