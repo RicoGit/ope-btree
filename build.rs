@@ -12,10 +12,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .compile_with_config(
             cfg,
             &[
-                "../../protocol-grpc/protobuf/ope_btree.proto",
-                "../../protocol-grpc/protobuf/ope_db_api.proto",
+                "../../protocol/grpc/ope_btree.proto",
+                "../../protocol/grpc/ope_db_api.proto",
             ],
-            &["../../protocol-grpc/protobuf/"],
+            &["../../protocol/grpc/"],
         )?;
     Ok(())
 }
