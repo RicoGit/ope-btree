@@ -18,9 +18,6 @@ use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 
-#[cfg(test)]
-mod integration_test;
-
 #[derive(Error, Debug)]
 pub enum DbError {
     #[error("BTree Error")]
@@ -61,7 +58,7 @@ where
     VS: KVStore<Bytes, Bytes>,
     D: Digest + 'static,
 {
-    fn new(index: OpeBTree<NS, D>, store: VS, update_channel: Sender<DatasetChanged>) -> Self {
+    pub fn new(index: OpeBTree<NS, D>, store: VS, update_channel: Sender<DatasetChanged>) -> Self {
         OpeDatabase {
             index: RwLock::new(index),
             value_store: Arc::new(RwLock::new(store)),
@@ -140,9 +137,9 @@ where
 /// All data needed to persist changes from the outside of Database
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct DatasetChanged {
-    new_m_root: Hash,
-    new_version: usize,
-    client_signature: Bytes,
+    pub new_m_root: Hash,
+    pub new_version: usize,
+    pub client_signature: Bytes,
 }
 
 impl DatasetChanged {

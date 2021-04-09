@@ -7,4 +7,5 @@ members = [
     "server",
     "server/grpc",
     "protocol",
+    "integration_test",
 ]

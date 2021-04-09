@@ -1,9 +1,6 @@
 //! Integration test for OpeDatabase and OpeDatabaseClient.
 //! Complex test for index and database.
 
-use crate::ope_btree::internal::node_store::BinaryNodeStore;
-use crate::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen};
-use crate::ope_db::{DatasetChanged, OpeDatabase};
 use bytes::Bytes;
 use client::ope_btree::test::NoOpCrypt;
 use client::ope_btree::OpeBTreeClient;
@@ -17,6 +14,10 @@ use log::LevelFilter;
 use protocol::btree::{BtreeCallback, ClientPutDetails, PutCallback, SearchCallback, SearchResult};
 use protocol::database::OpeDatabaseRpc;
 use protocol::{ProtocolError, RpcFuture};
+use server::ope_btree::internal::node_store::BinaryNodeStore;
+use server::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen};
+use server::ope_db::{DatasetChanged, OpeDatabase};
+
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};

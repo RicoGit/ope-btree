@@ -1,18 +1,18 @@
-//! Integration test for OpeBTree and OpeBTreeClient.
-//! We test only index here!
+//! Client ans server test via Grpc protocol with no encryption and with noop hasher.
+//! Note we test only Ope Btree index here!
 
-use super::*;
-use crate::ope_btree::command::Cmd;
-use crate::ope_btree::internal::node_store::BinaryNodeStore;
-use crate::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen, ValueRef};
 use bytes::{BufMut, Bytes, BytesMut};
-
-use client::ope_btree::test::*;
-use client::ope_btree::*;
+use client::ope_btree::test::{NoOpCrypt, PutStateWrapper};
+use client::ope_btree::OpeBTreeClient;
 use common::gen::NumGen;
 use common::noop_hasher::NoOpHasher;
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use log::LevelFilter;
+use server::ope_btree::command::Cmd;
+use server::ope_btree::internal::node_store::BinaryNodeStore;
+use server::ope_btree::*;
+use server::ope_btree::{OpeBTree, ValRefGen, ValueRef};
+use server::Hash;
 
 type BinStore = HashMapKVStore<Vec<u8>, Vec<u8>>;
 
