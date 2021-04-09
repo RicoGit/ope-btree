@@ -9,7 +9,9 @@ edition = "2018"
 [dev-dependencies]
 
 client = { path = "../client", features = ["test"]}
+client-grpc = { path = "../client/grpc" }
 server = { path = "../server" }
+server-grpc = { path = "../server/grpc" }
 common = { path = "../common" }
 protocol = { path = "../protocol" }
 kvstore-binary = { git="https://github.com/RicoGit/async-kvstore.git", branch="master" }
@@ -20,3 +22,8 @@ bytes = "1.0"
 log = "0.4"
 tokio = { version ="1.0", features = ["full"] }
 futures = "0.3"
+
+# Grpc
+tonic = "0.4.1"
+prost = "0.7"
+portpicker = "0.1"

@@ -1,6 +1,3 @@
-pub mod errors;
-pub mod rpc;
-
 use bytes::Bytes;
 use common::misc::ToBytes;
 use kvstore_api::kvstore::KVStore;
@@ -21,8 +18,10 @@ use tokio_stream::StreamExt;
 use tonic::codegen::Stream;
 use tonic::{Request, Response, Status, Streaming};
 
+pub mod errors;
 mod get_cb;
 mod put_cb;
+pub mod rpc;
 
 pub struct DbRpcImpl<NS, VS, D>
 where

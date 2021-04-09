@@ -1,27 +1,25 @@
 //! Simple client just create Db and get and put few values (for debug purpose)
 
-use crate::lib::GrpcDbRpc;
 use bytes::Bytes;
 use client::ope_btree::test::NoOpCrypt;
 use client::ope_btree::OpeBTreeClient;
 use client::ope_db::OpeDatabaseClient;
+use client_grpc::grpc::rpc::db_rpc_client::DbRpcClient;
+use client_grpc::grpc::GrpcDbRpc;
 use common::noop_hasher::NoOpHasher;
 use common::Hash;
 use env_logger::Env;
-use lib::rpc::db_rpc_client::DbRpcClient;
 use std::error::Error;
 use std::sync::atomic::AtomicUsize;
 
-mod lib;
-
-// todo move it to separate integration test
+// todo move it to separate integration and create proper CLI
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + 'static>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let addr = "http://[::1]:7777";
     let client = DbRpcClient::connect(addr).await?;
-    let rpc = lib::GrpcDbRpc::new(client);
+    let rpc = GrpcDbRpc::new(client);
 
     log::info!("Connected to {}", addr);
 

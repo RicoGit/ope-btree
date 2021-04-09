@@ -1,6 +1,6 @@
 #![allow(irrefutable_let_patterns)]
 
-use crate::lib::rpc::db_rpc_client::DbRpcClient;
+use crate::grpc::rpc::db_rpc_client::DbRpcClient;
 use common::misc::ToBytes;
 use common::misc::ToVecBytes;
 use futures::FutureExt;

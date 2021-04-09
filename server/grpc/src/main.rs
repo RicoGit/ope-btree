@@ -1,11 +1,9 @@
 use common::noop_hasher::NoOpHasher;
 use env_logger::Env;
 use server::ope_btree::OpeBTreeConf;
+use server_grpc::grpc::rpc::db_rpc_server::DbRpcServer;
 use std::error::Error;
 use tonic::transport::Server;
-
-// Grpc-based protocol implementation
-mod grpc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + 'static>> {
@@ -16,7 +14,7 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
         alpha: 0.25,
     };
     let (rx, mut tx) = tokio::sync::mpsc::channel(100);
-    let db = grpc::new_in_memory_db::<NoOpHasher>(conf, rx).await;
+    let db = server_grpc::grpc::new_in_memory_db::<NoOpHasher>(conf, rx).await;
 
     let addr = "[::1]:7777".parse().unwrap();
 
@@ -29,7 +27,7 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
     });
 
     Server::builder()
-        .add_service(grpc::rpc::db_rpc_server::DbRpcServer::new(db))
+        .add_service(DbRpcServer::new(db))
         .serve(addr)
         .await?;
 

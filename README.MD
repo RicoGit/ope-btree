@@ -34,7 +34,7 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 - [x] create Database
 - [x] integration test for Database
 - [x] implement transport (Grpc)
-- [ ] make integration test with real transport
+- [x] make integration test with real transport
 - [ ] create CI with Github actions
 - [ ] make distribution for server (build docker image)
 - [ ] make cli client
