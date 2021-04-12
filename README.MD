@@ -36,7 +36,7 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 - [x] implement transport (Grpc)
 - [x] make integration test with real transport
 - [ ] create CI with Github actions
-- [ ] make distribution for server (build docker image)
+- [x] make distribution for server (build docker image)
 - [ ] make cli client
 - [ ] make wasm cli
 - [ ] verifying non-trivial rebalancing
