@@ -36,7 +36,7 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 - [x] implement transport (Grpc)
 - [x] make integration test with real transport
 - [ ] create CI with Github actions
-- [x] make distribution for server (build docker image)
+- [x] make distribution for the server (build docker image)
 - [ ] make cli client
 - [ ] make wasm cli
 - [ ] verifying non-trivial rebalancing
@@ -44,3 +44,6 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 - [ ] implement range operation (when Streams will be stabilized) 
 - [ ] implement delete operation 
 - [ ] implement rockDb backend for all KVStores
+- [ ] keep min and max elem of tree for quick response if key < min and > max (optimisation)
+- [ ] bulk upload api is nice to have.
+- [ ] implement OPE table [optional] (OPE Table is updated to map the DET ciphertexts to their new or updated OPE encodings, see paper)

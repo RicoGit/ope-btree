@@ -14,7 +14,7 @@ pub struct Config {
     #[structopt(long, default_value = "4")]
     arity: u8,
 
-    /// Ope btree (index) property. Minimum capacity factor of node. Should be between 0 and 0.5. 0.25 means that
+    /// Ope btree (index) property. Minimum capacity factor of node. Should be between 0 and 1.0. 0.25 means that
     /// each node except root should always contains between 25% and 100% children.
     #[structopt(long, default_value = "0.25")]
     alpha: f32,

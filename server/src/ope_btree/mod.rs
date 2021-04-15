@@ -82,7 +82,7 @@ pub type NodeId = usize;
 pub struct OpeBTreeConf {
     /// Maximum size of nodes (maximum number children in branches), should be even.
     pub arity: u8,
-    /// Minimum capacity factor of node. Should be between 0 and 0.5. 0.25 means that
+    /// Minimum capacity factor of node. Should be between 0 and 1.0. 0.25 means that
     /// each node except root should always contains between 25% and 100% children.
     pub alpha: f32,
 }
