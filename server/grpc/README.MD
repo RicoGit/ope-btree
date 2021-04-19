@@ -12,6 +12,4 @@ Docker (docker required)(may take a few minutes).
 
 Run from the root of project.
 
-
-
     docker build -t dep-sanitizer .

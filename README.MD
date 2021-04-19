@@ -47,3 +47,4 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 - [ ] keep min and max elem of tree for quick response if key < min and > max (optimisation)
 - [ ] bulk upload api is nice to have.
 - [ ] implement OPE table [optional] (OPE Table is updated to map the DET ciphertexts to their new or updated OPE encodings, see paper)
+- [ ] Put operation should rewrite encrypted key and value
