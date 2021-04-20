@@ -6,14 +6,20 @@ use std::path::PathBuf;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DatasetConfig {
     /// Unique dataset id
-    id: String,
+    pub id: String,
 
     /// Last committed valid server state from previous session in base64 format.
     /// Should be empty string if it's first session with server.
-    merkle_root: String,
+    pub merkle_root: String,
 
     /// Number of version for current dataset state
-    version: usize,
+    pub version: usize,
+}
+
+impl DatasetConfig {
+    pub fn state(&self) -> String {
+        format!("{}:{}", self.id, self.version)
+    }
 }
 
 impl Default for DatasetConfig {
@@ -28,7 +34,7 @@ impl Default for DatasetConfig {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ClientState {
-    datasets: Vec<DatasetConfig>,
+    pub datasets: Vec<DatasetConfig>,
 }
 
 impl Default for ClientState {
@@ -60,9 +66,7 @@ impl ClientState {
         let state = ClientState::read(path.clone()).unwrap_or_else(|_| {
             // safe default config to json file
             let st = ClientState::default();
-            st.write(path)
-                .context("Can't write state to file")
-                .unwrap();
+            st.write(path).context("Can't write state to file").unwrap();
             st
         });
 

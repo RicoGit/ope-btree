@@ -28,6 +28,7 @@ prost = "0.7"
 
 # CLI
 structopt = "0.3"
+dialoguer = "0.8"
 
 [build-dependencies]
 # building Grpc

@@ -1,6 +1,5 @@
 //! Simple client just create Db and get and put few values (for debug purpose)
 
-use anyhow::Context;
 use bytes::Bytes;
 use client::ope_btree::test::NoOpCrypt;
 use client::ope_btree::OpeBTreeClient;
@@ -10,11 +9,17 @@ use client_grpc::grpc::GrpcDbRpc;
 use client_grpc::state::ClientState;
 use common::noop_hasher::NoOpHasher;
 use common::Hash;
+use dialoguer::Input;
 use env_logger::Env;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use structopt::StructOpt;
+
+use crate::tui::Cmd;
+use dialoguer::{theme::ColorfulTheme, Select};
+
+mod tui;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "ope-db-client", about = "Encrypted database CLI client")]
@@ -37,7 +42,7 @@ pub struct AppConfig {
     state_path: PathBuf,
 
     /// Logging level
-    #[structopt(long, default_value = "info")]
+    #[structopt(long, default_value = "warn")]
     log_lvl: String,
 }
 
@@ -57,35 +62,56 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
 
     // Creates client for String Key and Val, dummy Hasher and without Encryption
     let index = OpeBTreeClient::<NoOpCrypt, NoOpHasher>::new(Hash::empty(), NoOpCrypt {}, ());
+
+    let datasets = state
+        .datasets
+        .into_iter()
+        .map(|ds| ds.id.clone())
+        .collect::<Vec<_>>();
+
+    // choose dataset
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select dataset")
+        .default(0)
+        .items(&datasets)
+        .interact()
+        .unwrap();
+
+    let current_dataset = &datasets[selection];
+
     let mut db_client = OpeDatabaseClient::<NoOpCrypt, NoOpCrypt, NoOpHasher, GrpcDbRpc>::new(
         index,
         NoOpCrypt {},
         rpc,
         AtomicUsize::new(42),
-        Bytes::from("dataset_id"),
+        Bytes::from(current_dataset.clone().into_bytes()),
     );
 
-    // todo finish from here
-    // interact with user via CLI
+    loop {
+        let cmd: tui::Cmd = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(current_dataset)
+            .interact()
+            .unwrap();
 
-    log::info!("Send GET k1");
-    let k1 = "k1".to_string();
-    let res = db_client.get(k1).await?;
-    log::info!("Response: {:?}", res);
-    assert_eq!(None, res);
-
-    log::info!("Send PUT k1 v1");
-    let k1 = "k1".to_string();
-    let v1 = "v1".to_string();
-    let res = db_client.put(k1, v1.clone()).await?;
-    log::info!("Response: {:?}", res);
-    assert_eq!(None, res);
-
-    log::info!("Send GET k1");
-    let k1 = "k1".to_string();
-    let res = db_client.get(k1).await?;
-    log::info!("Response: {:?}", res);
-    assert_eq!(Some(v1), res);
+        match cmd {
+            Cmd::Get(key) => {
+                let res = db_client.get(key).await?;
+                println!("Response: {:?}", res);
+            }
+            Cmd::Put(key, val) => {
+                let res = db_client.put(key, val).await?;
+                // todo update client state and write it to file
+                println!("Response: {:?}", res);
+            }
+            Cmd::New(_dataset_id) => {
+                println!("Create new dataset is not implemented yet")
+            }
+            Cmd::Exit => {
+                println!("Bye!");
+                break;
+            }
+        }
+    }
 
     Ok(())
 }
