@@ -1,22 +1,19 @@
 //! Simple client just create Db and get and put few values (for debug purpose)
 
-use bytes::Bytes;
 use client::ope_btree::test::NoOpCrypt;
 use client::ope_btree::OpeBTreeClient;
 use client::ope_db::OpeDatabaseClient;
 use client_grpc::grpc::rpc::db_rpc_client::DbRpcClient;
 use client_grpc::grpc::GrpcDbRpc;
-use client_grpc::state::ClientState;
 use common::noop_hasher::NoOpHasher;
 use common::Hash;
 use dialoguer::Input;
 use env_logger::Env;
 use std::error::Error;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
 use structopt::StructOpt;
-
 use crate::tui::Cmd;
+use client_grpc::config_store::ConfigStore;
 use dialoguer::{theme::ColorfulTheme, Select};
 
 mod tui;
@@ -52,8 +49,8 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
 
     env_logger::Builder::from_env(Env::default().default_filter_or(&config.log_lvl)).init();
 
-    let state = ClientState::read_or_create(config.state_path.clone())?;
-    log::info!("Client state: {:?}", &state);
+    let config_store = ConfigStore::read_or_create(config.state_path.clone());
+    log::info!("Client state: {:?}", &config_store.config);
 
     let client = DbRpcClient::connect(config.host.clone()).await?;
     let rpc = GrpcDbRpc::new(client);
@@ -63,10 +60,18 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
     // Creates client for String Key and Val, dummy Hasher and without Encryption
     let index = OpeBTreeClient::<NoOpCrypt, NoOpHasher>::new(Hash::empty(), NoOpCrypt {}, ());
 
-    let datasets = state
+    let mut db_client = OpeDatabaseClient::<NoOpCrypt, NoOpCrypt, NoOpHasher, GrpcDbRpc>::new(
+        index,
+        NoOpCrypt {},
+        rpc,
+        config_store.config.clone(),
+    );
+
+    let datasets = config_store
+        .config
         .datasets
         .into_iter()
-        .map(|ds| ds.id.clone())
+        .map(|(id, _)| id.clone())
         .collect::<Vec<_>>();
 
     // choose dataset
@@ -77,19 +82,15 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
         .interact()
         .unwrap();
 
-    let current_dataset = &datasets[selection];
+    let selected_ds_id = &datasets[selection];
 
-    let mut db_client = OpeDatabaseClient::<NoOpCrypt, NoOpCrypt, NoOpHasher, GrpcDbRpc>::new(
-        index,
-        NoOpCrypt {},
-        rpc,
-        AtomicUsize::new(42),
-        Bytes::from(current_dataset.clone().into_bytes()),
-    );
+    if let Some(_) = db_client.dataset(selected_ds_id).await {
+        log::info!("Current dataset is {} now", selected_ds_id);
+    }
 
     loop {
         let cmd: tui::Cmd = Input::with_theme(&ColorfulTheme::default())
-            .with_prompt(current_dataset)
+            .with_prompt(selected_ds_id)
             .interact()
             .unwrap();
 

@@ -74,7 +74,7 @@ where
         &self,
         key: Key,
         value_checksum: Hash,
-        version: usize,
+        version: usize, // todo consider remove version from here
     ) -> PutState<'_, Key, Digest, Crypt> {
         log::debug!(
             "init_put starts put for key={:?}, value={:?}, version={:?}",

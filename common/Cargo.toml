@@ -8,6 +8,7 @@ edition = "2018"
 
 # Bytes
 bytes = { version = "1", features = ["serde"] }
+hex = "0.4.3"
 # Serde
 serde = { version = "1", features = ["derive"] }
 

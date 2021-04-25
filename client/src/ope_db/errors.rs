@@ -21,4 +21,6 @@ pub enum DatabaseClientError {
         #[from]
         source: ProtocolError,
     },
+    #[error("Dataset Error: {msg:?}")]
+    DatasetErr { msg: String },
 }

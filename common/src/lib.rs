@@ -3,14 +3,13 @@
 pub mod gen;
 pub mod merkle;
 pub mod misc;
-
 pub mod noop_hasher;
 
-use crate::misc::AsString;
+use crate::misc::{AsString, ToBytes};
 use bytes::{BufMut, Bytes, BytesMut};
-
 use digest::generic_array::{ArrayLength, GenericArray};
 pub use digest::Digest;
+use hex::FromHexError;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 
@@ -47,6 +46,11 @@ impl Hash {
         Hash(BytesMut::from(str))
     }
 
+    pub fn from_hex_str(str: &str) -> Result<Hash, FromHexError> {
+        let bytes = hex::decode(str)?;
+        Ok(Hash(bytes.bytes_mut()))
+    }
+
     /// Calculates Hash from specified data
     pub fn build<D: Digest, R: AsRef<[u8]>>(slice: R) -> Hash {
         Hash::from(D::digest(slice.as_ref()))
@@ -67,6 +71,11 @@ impl Hash {
         for hash in hashes.into_iter() {
             self.concat(hash)
         }
+    }
+
+    /// Encodes Hash as HEX string
+    pub fn to_hex_str(&self) -> String {
+        hex::encode(self)
     }
 }
 
@@ -179,6 +188,12 @@ mod tests {
     #[test]
     fn hash_as_ref_test() {
         assert_eq!("hash".as_bytes(), Hash::from_str("hash").as_ref())
+    }
+
+    #[test]
+    fn hash_to_hex_and_back_test() {
+        let hash = Hash::from_str("hash");
+        assert_eq!(hash, Hash::from_hex_str(&hash.to_hex_str()).unwrap())
     }
 
     #[test]

@@ -4,24 +4,19 @@
 use bytes::Bytes;
 use client::ope_btree::test::NoOpCrypt;
 use client::ope_btree::OpeBTreeClient;
+use client::ope_db::config::ClientConfig;
 use client::ope_db::OpeDatabaseClient;
 use client_grpc::grpc::rpc::db_rpc_client::DbRpcClient;
 use client_grpc::grpc::GrpcDbRpc;
-
 use common::noop_hasher::NoOpHasher;
 use common::Hash;
 use futures::FutureExt;
-
 use log::LevelFilter;
-
 use server::ope_btree::OpeBTreeConf;
 use server::ope_db::DatasetChanged;
-
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
-use std::sync::atomic::AtomicUsize;
 
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-
 use tonic::transport::Server;
 
 // todo move common code to common module
@@ -239,8 +234,7 @@ async fn connect_client(
                 index,
                 NoOpCrypt {},
                 rpc,
-                AtomicUsize::new(0),
-                Bytes::from("dataset_id"),
+                ClientConfig::default(),
             );
             break db_client;
         } else {

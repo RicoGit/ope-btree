@@ -17,12 +17,19 @@ related paper: https://eprint.iacr.org/2013/129.pdf
 
     RUST_LOG=debug cargo test ope_btree::tests::put_many_and_get_them_back_test -- --nocapture    
     
-### Notes: 
+### Run client and server: 
 
-- BTree operates only bytes, there is no needed to different K and V
-- Only tree client know what is actually type of K and V
-- Maybe consider using channels instead of callbacks
+Run Grpc-based Ope Db server implementation
 
+``bash
+    cargo run --bin server-grpc -- --arity 4  
+``
+
+Run Grpc-based Ope Db client implementation
+
+``bash
+    cargo run --bin client-grpc -- --host http://localhost:7777 --debug-mode true
+``
 
 ### Progress
 

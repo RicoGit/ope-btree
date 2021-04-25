@@ -4,6 +4,7 @@
 use bytes::Bytes;
 use client::ope_btree::test::NoOpCrypt;
 use client::ope_btree::OpeBTreeClient;
+use client::ope_db::config::ClientConfig;
 use client::ope_db::OpeDatabaseClient;
 use common::gen::NumGen;
 use common::noop_hasher::NoOpHasher;
@@ -18,7 +19,6 @@ use server::ope_btree::internal::node_store::BinaryNodeStore;
 use server::ope_btree::{OpeBTree, OpeBTreeConf, ValRefGen};
 use server::ope_db::{DatasetChanged, OpeDatabase};
 
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::Mutex;
@@ -340,9 +340,8 @@ fn create_client(
     let index: OpeBTreeClient<NoOpCrypt, NoOpHasher> =
         OpeBTreeClient::<NoOpCrypt, NoOpHasher>::new(Hash::empty(), crypt.clone(), ());
     let rpc = TestDatabaseRpc::new(db);
-    let dataset_id = "test_dataset".into();
 
-    OpeDatabaseClient::new(index, crypt, rpc, AtomicUsize::new(0), dataset_id)
+    OpeDatabaseClient::new(index, crypt, rpc, ClientConfig::default())
 }
 
 fn init_logger() {
