@@ -5,13 +5,12 @@ package opebtree;
 // GET: Server requests
 message GetCallback {
     oneof callback {
-        // sends found value to client
-        GetValue value = 1;
-
         // ask index of search key in branch
-        AskNextChildIndex next_child_idx = 10;
+        AskNextChildIndex next_child_idx = 1;
         // ask index of search key in leaf
-        AskSubmitLeaf submit_leaf = 11;
+        AskSubmitLeaf submit_leaf = 2;
+        // sends found value to client
+        GetValue value = 3;
 
         // sends server error to client
         Error server_error = 20;
@@ -21,16 +20,18 @@ message GetCallback {
 // GET: Client replies
 message GetCallbackReply {
     oneof reply {
-        // client sends database info (id and version)
-        DbInfo db_info = 1;
+        // client sends dataset info (id and version)
+        DatasetInfo dataset_info = 1;
 
         // client sends results of searching a key in the leaf
-        ReplyNextChildIndex next_child_idx = 10;
+        ReplyNextChildIndex next_child_idx = 2;
         // client sends results of searching a key in the leaf
-        ReplySubmitLeaf submit_leaf = 11;
+        ReplySubmitLeaf submit_leaf = 3;
 
         // client sends client error to server
         Error server_error = 20;
+
+        // todo add Cancel msg?
     }
 
 }
@@ -38,21 +39,21 @@ message GetCallbackReply {
 // PUT: Server requests
 message PutCallback {
     oneof callback {
-        // server sends previous stored value to client
-        PreviousValue value = 1;
-
         // server asks index of search key in branch
-        AskNextChildIndex next_child_idx = 10;
+        AskNextChildIndex next_child_idx = 1;
 
         // server asks index of search key in leaf and other details for putting
-        AskPutDetails put_details = 20;
+        AskPutDetails put_details = 2;
         // server asks verify made changes
-        AskVerifyChanges verify_changes = 21;
+        AskVerifyChanges verify_changes = 3;
         // server confirms that all changes was persisted
-        AskChangesStored changes_stored = 22;
+        AskChangesStored changes_stored = 4;
+        // server sends previous stored value to client
+        PreviousValue value = 5;
 
         // server sends server error to client
-        Error server_error = 30;
+        Error server_error = 20;
+
     }
 }
 
@@ -60,31 +61,33 @@ message PutCallback {
 message PutCallbackReply {
     oneof reply {
         // Initial (first) message in a client-server round trip.
-        // client sends database info (id and version)
-        DbInfo db_info = 1;
+        // client sends dataset info (id and version)
+        DatasetInfo dataset_info = 1;
         // client sends value for putting
         PutValue value = 2;
 
         // client sends index of search key in branch
-        ReplyNextChildIndex next_child_idx = 10;
+        ReplyNextChildIndex next_child_idx = 3;
 
         // client sends index of search key in leaf and other details for putting
-        ReplyPutDetails put_details = 20;
+        ReplyPutDetails put_details = 4;
         // client confirms made changes
-        ReplyVerifyChanges verify_changes = 21;
+        ReplyVerifyChanges verify_changes = 5;
         // client confirms server confirmation
-        ReplyChangesStored changes_stored = 22;
+        ReplyChangesStored changes_stored = 6;
 
         // client sends client error to server
-        Error server_error = 30;
+        Error server_error = 20;
+
+        // todo add Cancel msg?
     }
 }
 
 
-message DbInfo {
-    // database id
+message DatasetInfo {
+    // dataset id
     bytes id = 1;
-    // expected database version
+    // expected dataset version
     int64 version = 2;
 }
 

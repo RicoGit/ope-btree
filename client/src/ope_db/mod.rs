@@ -1,7 +1,7 @@
 use crate::crypto::{Decryptor, Encryptor};
 use crate::ope_btree::OpeBTreeClient;
-use crate::ope_db::errors::DatabaseClientError;
 use crate::ope_db::config::ClientConfig;
+use crate::ope_db::errors::DatabaseClientError;
 use bytes::Bytes;
 use common::Hash;
 use protocol::database::OpeDatabaseRpc;
@@ -9,8 +9,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-mod errors;
 pub mod config;
+mod errors;
 
 pub type Result<V> = std::result::Result<V, DatabaseClientError>;
 

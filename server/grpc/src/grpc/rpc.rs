@@ -8,14 +8,6 @@ use server::ope_db::DbError;
 pub mod get {
     use super::*;
 
-    pub fn value_msg(value: Option<Bytes>) -> GetCallback {
-        GetCallback {
-            callback: Some(get_callback::Callback::Value(GetValue {
-                value: value.map(|vec| vec.to_vec()),
-            })),
-        }
-    }
-
     pub fn next_child_idx_msg(keys: Vec<Bytes>, children_checksums: Vec<Bytes>) -> GetCallback {
         GetCallback {
             callback: Some(get_callback::Callback::NextChildIdx(AskNextChildIndex {
@@ -34,6 +26,14 @@ pub mod get {
         }
     }
 
+    pub fn value_msg(value: Option<Bytes>) -> GetCallback {
+        GetCallback {
+            callback: Some(get_callback::Callback::Value(GetValue {
+                value: value.map(|vec| vec.to_vec()),
+            })),
+        }
+    }
+
     pub fn server_error_msg(err: DbError) -> GetCallback {
         GetCallback {
             callback: Some(get_callback::Callback::ServerError(Error {
@@ -47,14 +47,6 @@ pub mod get {
 pub mod put {
     use super::*;
     use protocol::btree::SearchResult;
-
-    pub fn value_msg(value: Option<Bytes>) -> PutCallback {
-        PutCallback {
-            callback: Some(put_callback::Callback::Value(PreviousValue {
-                value: value.map(|vec| vec.to_vec()),
-            })),
-        }
-    }
 
     pub fn next_child_idx_msg(keys: Vec<Bytes>, children_checksums: Vec<Bytes>) -> PutCallback {
         PutCallback {
@@ -86,6 +78,14 @@ pub mod put {
     pub fn changes_stored_msg() -> PutCallback {
         PutCallback {
             callback: Some(put_callback::Callback::ChangesStored(AskChangesStored {})),
+        }
+    }
+
+    pub fn value_msg(value: Option<Bytes>) -> PutCallback {
+        PutCallback {
+            callback: Some(put_callback::Callback::Value(PreviousValue {
+                value: value.map(|vec| vec.to_vec()),
+            })),
         }
     }
 

@@ -42,6 +42,8 @@ Run Grpc-based Ope Db client implementation
 - [x] integration test for Database
 - [x] implement transport (Grpc)
 - [x] make integration test with real transport
+- [ ] support dataset for client
+- [ ] support dataset for server
 - [ ] create CI with Github actions
 - [x] make distribution for the server (build docker image)
 - [ ] make cli client

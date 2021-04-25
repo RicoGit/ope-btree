@@ -9,7 +9,7 @@ pub mod get {
 
     pub fn db_info_msg(dataset_id: Bytes, version: usize) -> GetCallbackReply {
         GetCallbackReply {
-            reply: Some(get_callback_reply::Reply::DbInfo(DbInfo {
+            reply: Some(get_callback_reply::Reply::DatasetInfo(DatasetInfo {
                 id: dataset_id.to_vec(),
                 version: version as i64,
             })),
@@ -43,7 +43,7 @@ pub mod put {
 
     pub fn db_info_msg(dataset_id: Bytes, version: usize) -> PutCallbackReply {
         PutCallbackReply {
-            reply: Some(put_callback_reply::Reply::DbInfo(DbInfo {
+            reply: Some(put_callback_reply::Reply::DatasetInfo(DatasetInfo {
                 id: dataset_id.to_vec(),
                 version: version as i64,
             })),

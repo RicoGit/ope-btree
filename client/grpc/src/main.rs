@@ -1,20 +1,20 @@
 //! Simple client just create Db and get and put few values (for debug purpose)
 
+use crate::tui::Cmd;
 use client::ope_btree::test::NoOpCrypt;
 use client::ope_btree::OpeBTreeClient;
 use client::ope_db::OpeDatabaseClient;
+use client_grpc::config_store::ConfigStore;
 use client_grpc::grpc::rpc::db_rpc_client::DbRpcClient;
 use client_grpc::grpc::GrpcDbRpc;
 use common::noop_hasher::NoOpHasher;
 use common::Hash;
 use dialoguer::Input;
+use dialoguer::{theme::ColorfulTheme, Select};
 use env_logger::Env;
 use std::error::Error;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use crate::tui::Cmd;
-use client_grpc::config_store::ConfigStore;
-use dialoguer::{theme::ColorfulTheme, Select};
 
 mod tui;
 

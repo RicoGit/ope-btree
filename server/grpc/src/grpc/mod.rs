@@ -5,7 +5,7 @@ use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use rpc::db_rpc_server::DbRpc;
 use rpc::get_callback_reply::Reply as GetReply;
 use rpc::put_callback_reply::Reply as PutReply;
-use rpc::DbInfo;
+use rpc::DatasetInfo;
 use server::ope_btree::OpeBTreeConf;
 use server::ope_db::{DatasetChanged, OpeDatabase};
 use server::Digest;
@@ -67,8 +67,12 @@ where
                     reply(result_in, Err(status))?;
                 } else {
                     match client_reply.unwrap().reply {
-                        Some(GetReply::DbInfo(DbInfo { id, version })) => {
-                            log::debug!("Server receive DbInfo({:?},{:?})", id, version);
+                        Some(GetReply::DatasetInfo(DatasetInfo { id, version })) => {
+                            log::debug!("Server receive DatasetInfo({:?},{:?})", id, version);
+
+
+
+
 
                             // get specified Database with required version - todo implement, only one db is supported now
 
@@ -153,14 +157,14 @@ where
         // waiting first message with DnInfo
         let mut client_replies = request.into_inner();
 
-        // receive first msg: PutReply::DbInfo
+        // receive first msg: PutReply::DatasetInfo
         match client_replies.try_next().await {
             Ok(Some(rpc::PutCallbackReply {
-                reply: Some(PutReply::DbInfo(DbInfo { id, version })),
+                reply: Some(PutReply::DatasetInfo(DatasetInfo { id, version })),
             })) => {
-                log::debug!("Server receive DbInfo({:?},{:?})", id.bytes(), version);
+                log::debug!("Server receive DatasetInfo({:?},{:?})", id.bytes(), version);
 
-                // get specified Database with required version - todo implement, only one db is supported now
+                // get specified Dataset with required version - todo implement, only one db is supported now
 
                 // receive second msg: PutReply::Value
                 match client_replies.try_next().await {
@@ -214,7 +218,7 @@ where
                 }
             }
             Ok(unexpected) => {
-                let status = errors::unexpected_msg_status("DbInfo", unexpected);
+                let status = errors::unexpected_msg_status("DatasetInfo", unexpected);
                 reply(result_in, Err(status))?;
             }
             Err(status) => {

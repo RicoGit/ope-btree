@@ -39,6 +39,7 @@ pub enum DbError {
 
 pub type Result<V> = std::result::Result<V, DbError>;
 
+// todo OpeDatabase should support multiple datasets
 pub struct OpeDatabase<NS, VS, D>
 where
     NS: KVStore<Vec<u8>, Vec<u8>>,
