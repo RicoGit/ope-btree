@@ -26,7 +26,7 @@ impl Key {
     }
 
     /// Turns str to Key (for test purpose)
-    pub fn from_str(str: &str) -> Key {
+    pub fn from_string(str: &str) -> Key {
         Key(BytesMut::from(str))
     }
 }
@@ -42,7 +42,7 @@ impl Hash {
     }
 
     /// Turns str to Hash (for test purpose)
-    pub fn from_str(str: &str) -> Hash {
+    pub fn from_string(str: &str) -> Hash {
         Hash(BytesMut::from(str))
     }
 
@@ -128,7 +128,7 @@ mod tests {
     fn is_empty_test() {
         let empty = Hash::empty();
         assert!(empty.is_empty());
-        let non_empty = Hash::from_str("non empty");
+        let non_empty = Hash::from_string("non empty");
         assert!(!non_empty.is_empty());
     }
 
@@ -146,32 +146,32 @@ mod tests {
     #[test]
     fn concat_test() {
         let empty = Hash::empty();
-        let mut one = Hash::from_str("_1_");
-        let two = Hash::from_str("_2_");
+        let mut one = Hash::from_string("_1_");
+        let two = Hash::from_string("_2_");
 
         one.concat(empty);
-        assert_eq!(one, Hash::from_str("_1_"));
+        assert_eq!(one, Hash::from_string("_1_"));
 
         one.concat(two);
-        assert_eq!(one, Hash::from_str("_1__2_"));
+        assert_eq!(one, Hash::from_string("_1__2_"));
     }
 
     #[test]
     fn concat_all_test() {
-        let mut one = Hash::from_str("_1_");
+        let mut one = Hash::from_string("_1_");
 
-        let many = vec![Hash::from_str("_A_"), Hash::from_str("_B_")];
+        let many = vec![Hash::from_string("_A_"), Hash::from_string("_B_")];
         let empty1 = vec![];
         let empty2 = vec![Hash::empty()];
 
         one.concat_all(empty1);
-        assert_eq!(Hash::from_str("_1_"), one);
+        assert_eq!(Hash::from_string("_1_"), one);
 
         one.concat_all(empty2);
-        assert_eq!(Hash::from_str("_1_"), one);
+        assert_eq!(Hash::from_string("_1_"), one);
 
         one.concat_all(many);
-        assert_eq!(Hash::from_str("_1__A__B_"), one);
+        assert_eq!(Hash::from_string("_1__A__B_"), one);
     }
 
     #[test]
@@ -187,20 +187,20 @@ mod tests {
 
     #[test]
     fn hash_as_ref_test() {
-        assert_eq!("hash".as_bytes(), Hash::from_str("hash").as_ref())
+        assert_eq!("hash".as_bytes(), Hash::from_string("hash").as_ref())
     }
 
     #[test]
     fn hash_to_hex_and_back_test() {
-        let hash = Hash::from_str("hash");
+        let hash = Hash::from_string("hash");
         assert_eq!(hash, Hash::from_hex_str(&hash.to_hex_str()).unwrap())
     }
 
     #[test]
     fn display_test() {
-        let mut input = Hash::from_str("start");
+        let mut input = Hash::from_string("start");
         input.0.put_u8(STR_END_SIGN);
-        input.concat(Hash::from_str("end"));
+        input.concat(Hash::from_string("end"));
         assert_eq!(input.to_string(), "Hash[9, start]");
 
         let hash = Hash::build::<NoOpHasher, _>("test");

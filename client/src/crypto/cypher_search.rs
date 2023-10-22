@@ -84,7 +84,7 @@ mod tests {
     fn binary_search_one_elem_test() {
         let cs = CipherSearch::new(NoOpCrypt::default());
 
-        let vec = vec![Key::from_str("k2")];
+        let vec = vec![Key::from_string("k2")];
         assert_eq!(cs.binary_search(&vec, k(1)).unwrap(), SearchResult(Err(0)));
         assert_eq!(cs.binary_search(&vec, k(2)).unwrap(), SearchResult(Ok(0)));
         assert_eq!(cs.binary_search(&vec, k(3)).unwrap(), SearchResult(Err(1)));
@@ -95,11 +95,11 @@ mod tests {
         let cs = CipherSearch::new(NoOpCrypt::default());
 
         let vec = vec![
-            Key::from_str("k1"),
-            Key::from_str("k2"),
-            Key::from_str("k4"),
-            Key::from_str("k7"),
-            Key::from_str("k8"),
+            Key::from_string("k1"),
+            Key::from_string("k2"),
+            Key::from_string("k4"),
+            Key::from_string("k7"),
+            Key::from_string("k8"),
         ];
         assert_eq!(cs.binary_search(&vec, k(0)).unwrap(), SearchResult(Err(0)));
         assert_eq!(cs.binary_search(&vec, k(1)).unwrap(), SearchResult(Ok(0)));

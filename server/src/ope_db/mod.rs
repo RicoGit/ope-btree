@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 //! Server side encrypted (OPE) Key-Value database. Uses Ope-Btree as index and KVStore
 //! as backend for persisting data.
 

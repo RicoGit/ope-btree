@@ -184,7 +184,7 @@ where
                 async move { Ok(signed_state) }.boxed()
             } else {
                 // server was failed verification
-                let error = BTreeClientError::wrong_put_proof(&self, &server_merkle_root).into();
+                let error = BTreeClientError::wrong_put_proof(self, &server_merkle_root).into();
                 async move { Err(error) }.boxed()
             }
         } else {

@@ -52,6 +52,6 @@ impl<Cb: SearchCallback> Cmd<Cb> {
             .cb
             .submit_leaf(keys.into_bytes(), values_hashes.into_bytes())
             .await?;
-        return Ok(res);
+        Ok(res)
     }
 }

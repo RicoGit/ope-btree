@@ -22,7 +22,7 @@ pub fn send_err_to_protocol_err<T>(err: SendError<T>) -> ProtocolError {
 }
 
 pub fn send_err_to_status<T>(_msg: Result<Response<T>, Status>) -> Status {
-    let msg = format!("Sending reply to client failed");
+    let msg = "Sending reply to client failed";
     Status::internal(msg)
 }
 

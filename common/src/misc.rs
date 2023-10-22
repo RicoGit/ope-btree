@@ -103,8 +103,8 @@ impl AsString for Hash {
 }
 
 /// Replaces ''item'' in ''vector'' for specified ''idx''
-pub fn replace<T>(vector: &mut Vec<T>, item: T, idx: usize) {
-    let _ = std::mem::replace(&mut vector[idx], item.into());
+pub fn replace<T>(vector: &mut [T], item: T, idx: usize) {
+    let _ = std::mem::replace(&mut vector[idx], item);
 }
 
 pub trait FromVecBytes {
