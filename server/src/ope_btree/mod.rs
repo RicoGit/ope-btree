@@ -154,7 +154,7 @@ where
             val_ref_gen: Arc::new(Mutex::new(val_ref_gen)),
             max_degree,
             min_degree,
-            phantom_data: PhantomData::default(),
+            phantom_data: PhantomData,
         }
     }
 

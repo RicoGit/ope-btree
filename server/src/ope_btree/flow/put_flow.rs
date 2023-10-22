@@ -48,7 +48,7 @@ where
             cmd,
             node_store,
             val_ref_gen,
-            phantom_data: PhantomData::default(),
+            phantom_data: PhantomData,
             max_degree,
             min_degree,
         }

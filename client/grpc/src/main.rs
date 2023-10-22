@@ -68,12 +68,7 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
         config_store.config.clone(),
     );
 
-    let datasets = config_store
-        .config
-        .datasets
-        .into_iter()
-        .map(|(id, _)| id.clone())
-        .collect::<Vec<_>>();
+    let datasets = config_store.config.datasets.into_keys().collect::<Vec<_>>();
 
     // choose dataset
     let selection = Select::with_theme(&ColorfulTheme::default())
@@ -85,7 +80,7 @@ async fn main() -> Result<(), Box<dyn Error + 'static>> {
 
     let selected_ds_id = &datasets[selection];
 
-    if let Some(_) = db_client.dataset(selected_ds_id).await {
+    if db_client.dataset(selected_ds_id).await.is_some() {
         log::info!("Current dataset is {} now", selected_ds_id);
     }
 

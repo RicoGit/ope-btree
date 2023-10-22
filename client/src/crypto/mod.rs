@@ -20,6 +20,7 @@ pub trait Decryptor {
     fn decrypt(&self, encrypted_data: &[u8]) -> Result<Self::PlainData>;
 }
 
+#[derive(Default, Debug)]
 struct NoOpCrypt {}
 
 impl Encryptor for NoOpCrypt {
@@ -35,12 +36,6 @@ impl Decryptor for NoOpCrypt {
 
     fn decrypt(&self, encrypted_data: &[u8]) -> Result<String> {
         Ok(String::from_utf8_lossy(encrypted_data).to_string())
-    }
-}
-
-impl Default for NoOpCrypt {
-    fn default() -> Self {
-        NoOpCrypt {}
     }
 }
 

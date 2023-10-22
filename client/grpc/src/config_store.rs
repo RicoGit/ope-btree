@@ -13,7 +13,7 @@ impl ConfigStore {
     /// Tries read config from json file, if file is not exists,
     /// creates default state and safe to json file.
     pub fn read_or_create(path: PathBuf) -> ConfigStore {
-        let store = ConfigStore::read(path.clone()).unwrap_or_else(|_| {
+        ConfigStore::read(path.clone()).unwrap_or_else(|_| {
             // safe default config to json file
             let store = ConfigStore {
                 config: ClientConfig::default(),
@@ -22,9 +22,7 @@ impl ConfigStore {
 
             store.write().context("Can't write state to file").unwrap();
             store
-        });
-
-        store
+        })
     }
 
     /// Reads config from json file

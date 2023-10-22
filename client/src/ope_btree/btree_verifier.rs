@@ -14,7 +14,7 @@ pub struct BTreeVerifier<Digest> {
 impl<Digest: common::Digest> BTreeVerifier<Digest> {
     pub fn new() -> Self {
         BTreeVerifier {
-            _digest: PhantomData::default(),
+            _digest: PhantomData,
         }
     }
 
@@ -223,7 +223,7 @@ mod tests {
         // client's path is not empty, state hash exists
         let proof = NodeProof::new(h("[k1][k2]"), children_hashes.clone(), Some(1));
         let res = verifier.check_proof(
-            NodeProof::new(Hash::empty(), vec![Hash::from_str("h2")], None),
+            NodeProof::new(Hash::empty(), vec![Hash::from_string("h2")], None),
             h("[[k1][k2]][h1][h2][h3]"),
             &MerklePath::new(proof),
         );
@@ -326,7 +326,7 @@ mod tests {
         ClientPutDetails::new(k(key).bytes(), h(val).bytes(), sr)
     }
     fn k(str: &str) -> Key {
-        Key::from_str(str)
+        Key::from_string(str)
     }
     fn h(str: &str) -> Hash {
         Hash::build::<NoOpHasher, _>(str.as_bytes())

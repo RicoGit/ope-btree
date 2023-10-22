@@ -84,10 +84,12 @@ impl Digest for NoOpHasher {
         let len = data.len();
         self.reset();
 
-        GenericArray::from_exact_iter(data.into_iter()).expect(&format!(
-            "NoOpHasher::result() failed, cause data must to have size={}, actually={}",
-            HASH_SIZE, len
-        ))
+        GenericArray::from_exact_iter(data).unwrap_or_else(|| {
+            panic!(
+                "NoOpHasher::result() failed, cause data must to have size={}, actually={}",
+                HASH_SIZE, len
+            )
+        })
     }
 
     fn reset(&mut self) {

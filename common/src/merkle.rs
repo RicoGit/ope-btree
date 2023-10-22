@@ -192,9 +192,9 @@ impl MerklePath {
 
     /// If last proof exists, adds to it child_hash on substitution position
     pub fn insert_child_hash_to_last_proof(&mut self, child_hash: Hash, idx: usize) {
-        self.0
-            .last_mut()
-            .map(|last_proof| last_proof.children_hashes.insert(idx, child_hash));
+        if let Some(last_proof) = self.0.last_mut() {
+            last_proof.children_hashes.insert(idx, child_hash);
+        }
     }
 
     /// Calculates new merkle root from merkle path. Folds merkle path from the right to the left and
@@ -255,7 +255,7 @@ mod tests {
         let proof = node_proof("State", Some(1));
         let result = proof
             .clone()
-            .calc_checksum::<NoOpHasher>(Some(Hash::from_str("#new#")));
+            .calc_checksum::<NoOpHasher>(Some(Hash::from_string("#new#")));
 
         assert_eq!(result.to_string(), "Hash[512, [StateChild1#new#Child3]]")
     }
@@ -294,7 +294,7 @@ mod tests {
         let proof = node_proof("state", Some(1));
         let result = proof
             .clone()
-            .calc_checksum::<Sha3_256>(Some(Hash::from_str("#new#")));
+            .calc_checksum::<Sha3_256>(Some(Hash::from_string("#new#")));
 
         let NodeProof {
             mut state_hash,
@@ -305,9 +305,9 @@ mod tests {
         let expected_hash = {
             let old = std::mem::replace(
                 &mut children_hashes[substitution_idx.unwrap()],
-                Hash::from_str("#new#"),
+                Hash::from_string("#new#"),
             );
-            assert_eq!(old, Hash::from_str("Child2"));
+            assert_eq!(old, Hash::from_string("Child2"));
             state_hash.concat_all(children_hashes);
             Hash::build::<Sha3_256, _>(state_hash.bytes().as_ref())
         };
@@ -346,7 +346,7 @@ mod tests {
             vec!["Proof1", "Proof2", "Proof3"],
             vec![Some(1), Some(1), Some(1)],
         );
-        let result = m_path.calc_merkle_root::<NoOpHasher>(Some(Hash::from_str("#new#")));
+        let result = m_path.calc_merkle_root::<NoOpHasher>(Some(Hash::from_string("#new#")));
         assert_eq!(
             result.to_string(),
             "Hash[512, [Proof1Child1[Proof2Child1[Proof3Child1#new#Child3]Child3]Child3]]"
@@ -373,9 +373,9 @@ mod tests {
         NodeProof {
             state_hash: Hash(BytesMut::from(state)),
             children_hashes: vec![
-                Hash::from_str("Child1"),
-                Hash::from_str("Child2"),
-                Hash::from_str("Child3"),
+                Hash::from_string("Child1"),
+                Hash::from_string("Child2"),
+                Hash::from_string("Child3"),
             ],
             substitution_idx: idx,
         }

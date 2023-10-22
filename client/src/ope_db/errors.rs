@@ -5,6 +5,7 @@ use thiserror::Error;
 
 /// Database client errors
 #[derive(Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum DatabaseClientError {
     #[error("Index Error")]
     IndexErr {

@@ -66,7 +66,7 @@ where
         todo!()
     }
 
-    pub fn delete_dataset(&mut self, _name: &str) -> () {
+    pub fn delete_dataset(&mut self, _name: &str) {
         todo!()
     }
 
@@ -84,7 +84,7 @@ where
             .storage
             .get(dataset.id, dataset.version, callback)
             .await?;
-        Ok(self.decrypt(response)?)
+        self.decrypt(response)
     }
 
     /// Puts key value pair (K, V). Updates existing value if it's present.
@@ -107,7 +107,7 @@ where
         // todo update version and m_root (todo handle errors)
         let _ = self.increment_version().await;
 
-        Ok(self.decrypt(response)?)
+        self.decrypt(response)
     }
 
     /// Finds and removes key value pair (K, V) for the corresponded key.
@@ -142,8 +142,9 @@ where
     }
 
     async fn increment_version(&mut self) -> Result<()> {
-        let mut cur_ds = self.current_dataset.write().await;
-        cur_ds.as_mut().map(|ds| ds.version += 1);
+        if let Some(ds) = self.current_dataset.write().await.as_mut() {
+            ds.version += 1;
+        }
         Ok(())
     }
 }
