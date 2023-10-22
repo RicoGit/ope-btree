@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use common::misc::ToBytes;
+use futures::Stream;
 use kvstore_api::kvstore::KVStore;
 use kvstore_inmemory::hashmap_store::HashMapKVStore;
 use rpc::db_rpc_server::DbRpc;
@@ -15,7 +16,6 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tonic::codegen::Stream;
 use tonic::{Request, Response, Status, Streaming};
 
 pub mod errors;
@@ -69,10 +69,6 @@ where
                     match client_reply.unwrap().reply {
                         Some(GetReply::DatasetInfo(DatasetInfo { id, version })) => {
                             log::debug!("Server receive DatasetInfo({:?},{:?})", id, version);
-
-
-
-
 
                             // get specified Database with required version - todo implement, only one db is supported now
 

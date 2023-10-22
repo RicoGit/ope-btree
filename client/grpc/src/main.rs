@@ -20,6 +20,7 @@ mod tui;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "ope-db-client", about = "Encrypted database CLI client")]
+#[allow(dead_code)]
 pub struct AppConfig {
     /// Server host and port, ex `http://localhost:7777`
     #[structopt(long)]

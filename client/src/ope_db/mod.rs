@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::crypto::{Decryptor, Encryptor};
 use crate::ope_btree::OpeBTreeClient;
 use crate::ope_db::config::ClientConfig;
